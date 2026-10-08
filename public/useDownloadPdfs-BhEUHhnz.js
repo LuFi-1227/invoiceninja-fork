@@ -1,0 +1,1 @@
+import{Gi as e,It as t,Lt as n,wt as r}from"./forms-DEWnBS77.js";function i({entity:i}){let a=e();return e=>{e.length&&(n.processing(),a.fetchQuery({queryKey:[`/api/v1/${i}s/bulk`],queryFn:()=>t(`POST`,r(`/api/v1/${i}s/bulk`),{action:`bulk_download`,ids:e}).then(e=>(n.success(`downloaded_entities`),e))}))}}export{i as t};

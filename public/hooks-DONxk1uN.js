@@ -1,0 +1,1 @@
+import{si as e}from"./forms-DEWnBS77.js";import{s as t}from"./enterprise-plan-D1spU5Df.js";function n(){let n=e();return(e,r)=>{n(t({object:`company`,property:`settings.${e}`,value:r}))}}export{n as t};

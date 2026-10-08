@@ -64,3 +64,8 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# local backups
+/resources/views/react.bak.*/
+*.bak
+/public/react.bak*

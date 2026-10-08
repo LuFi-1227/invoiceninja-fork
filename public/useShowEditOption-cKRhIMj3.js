@@ -1,0 +1,1 @@
+import{Mr as e}from"./forms-DEWnBS77.js";function t(){let t=e();return e=>!e.invoice_id||!t?.invoice_task_lock}export{t};

@@ -1,0 +1,1 @@
+import{Gi as e,It as t,wt as n}from"./forms-DEWnBS77.js";function r(){let r=e();return{find:e=>r.fetchQuery({queryKey:[`/api/v1/clients`,e],queryFn:()=>t(`GET`,n(`/api/v1/clients/:id?include=group_settings`,{id:e})).then(e=>e.data.data),staleTime:1/0})}}export{r as t};
