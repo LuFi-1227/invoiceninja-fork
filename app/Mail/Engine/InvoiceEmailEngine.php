@@ -21,6 +21,7 @@ use App\Utils\HtmlEngine;
 use Illuminate\Support\Str;
 use App\Utils\Traits\MakesHash;
 use App\Jobs\Entity\CreateRawPdf;
+use App\Services\Asaas\AsaasBoletoService;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Cache;
@@ -137,6 +138,26 @@ class InvoiceEmailEngine extends BaseEmailEngine
             // }
 
             $this->setAttachments([['file' => base64_encode($pdf), 'name' => $this->invoice->numberFormatter() . '.pdf']]);
+        }
+
+        // Attach the Asaas Boleto alongside the invoice PDF when enabled
+        if (
+            $this->client->getSetting('asaas_boleto_email_attachment') !== false
+            && $this->invoice->company->account->hasFeature(Account::FEATURE_PDF_ATTACHMENT)
+            && (float) $this->invoice->balance > 0
+        ) {
+            try {
+                $boleto = AsaasBoletoService::forInvoice($this->invoice)->resolvePdf();
+
+                if ($boleto && !empty($boleto['pdf'])) {
+                    $this->setAttachments([[
+                        'file' => base64_encode($boleto['pdf']),
+                        'name' => $boleto['filename'] ?? ('Boleto_' . ($this->invoice->number ?: $this->invoice->id) . '.pdf'),
+                    ]]);
+                }
+            } catch (\Throwable $e) {
+                nlog('Could not attach Asaas Boleto to invoice email: ' . $e->getMessage());
+            }
         }
 
         //attach third party documents

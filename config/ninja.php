@@ -215,6 +215,7 @@ return [
         'enabled' => env('WHATSAPP_ENABLED', true),
         'provider' => env('WHATSAPP_PROVIDER', 'evolution'), // 'evolution' or 'meta'
         'send_pdf' => env('WHATSAPP_SEND_PDF', false),
+        'send_boleto' => env('WHATSAPP_SEND_BOLETO', false),
         'auto_send_on_create' => env('WHATSAPP_AUTO_SEND_ON_CREATE', false),
         'auto_send_reminders' => env('WHATSAPP_AUTO_SEND_REMINDERS', true),
         'evolution' => [

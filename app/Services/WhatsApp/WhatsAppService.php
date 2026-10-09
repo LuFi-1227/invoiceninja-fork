@@ -16,6 +16,7 @@ use App\Jobs\Util\SystemLogger;
 use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\SystemLog;
+use App\Services\Asaas\AsaasBoletoService;
 use App\Services\Invoice\GetInvoicePdf;
 use App\Services\WhatsApp\Contracts\WhatsAppDriverInterface;
 use App\Services\WhatsApp\Drivers\EvolutionApiDriver;
@@ -49,6 +50,7 @@ class WhatsAppService
             'provider' => $provider,
             'enabled' => (bool) ($companySettings['enabled'] ?? config('ninja.whatsapp.enabled', env('WHATSAPP_ENABLED', true))),
             'send_pdf' => (bool) ($companySettings['send_pdf'] ?? config('ninja.whatsapp.send_pdf', env('WHATSAPP_SEND_PDF', false))),
+            'send_boleto' => (bool) ($companySettings['send_boleto'] ?? config('ninja.whatsapp.send_boleto', env('WHATSAPP_SEND_BOLETO', false))),
             'auto_send_on_create' => (bool) ($companySettings['auto_send_on_create'] ?? false),
             'auto_send_reminders' => (bool) ($companySettings['auto_send_reminders'] ?? config('ninja.whatsapp.auto_send_reminders', true)),
             'message_template' => $companySettings['message_template'] ?? null,
@@ -294,6 +296,9 @@ class WhatsAppService
             }
         }
 
+        // 3. Send the Asaas Boleto attachment when enabled
+        $this->sendBoletoIfEnabled($invoice, $recipientPhone);
+
         // Mark invoice as sent if not already sent
         $invoice->service()->markSent()->save();
 
@@ -399,6 +404,9 @@ class WhatsAppService
             }
         }
 
+        // 3. Send the Asaas Boleto attachment when enabled
+        $this->sendBoletoIfEnabled($invoice, $recipientPhone);
+
         SystemLogger::dispatch(
             [
                 'invoice_id' => $invoice->id,
@@ -419,6 +427,39 @@ class WhatsAppService
             'message' => "Lembrete ({$reminderTemplate}) enviado via WhatsApp com sucesso para {$recipientPhone}",
             'data' => $result,
         ];
+    }
+
+    /**
+     * Send the Asaas Boleto as a document when the company has it enabled.
+     */
+    protected function sendBoletoIfEnabled(Invoice $invoice, ?string $phone): void
+    {
+        if (!($this->config['send_boleto'] ?? false) || empty($phone) || !$this->driver) {
+            return;
+        }
+
+        try {
+            $boleto = AsaasBoletoService::forInvoice($invoice)->resolvePdf();
+
+            if (!$boleto) {
+                return;
+            }
+
+            $caption = 'Boleto da Fatura ' . ($invoice->number ?: '#' . $invoice->id);
+            if (!empty($boleto['linha_digitavel'])) {
+                $caption .= "\nLinha digitável: " . $boleto['linha_digitavel'];
+            }
+
+            $filename = $boleto['filename'] ?? ('Boleto_' . ($invoice->number ?: $invoice->id) . '.pdf');
+
+            if (!empty($boleto['pdf'])) {
+                $this->driver->sendDocument($phone, $boleto['pdf'], $filename, $caption);
+            } elseif (!empty($boleto['url'])) {
+                $this->driver->sendDocument($phone, $boleto['url'], $filename, $caption);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("Could not attach Boleto in WhatsApp message: " . $e->getMessage());
+        }
     }
 
     /**
