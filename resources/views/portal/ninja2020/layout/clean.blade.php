@@ -55,7 +55,7 @@
 
         <!-- Title -->
         @if(isset($account) && !$account->isPaid())
-            <title>@yield('meta_title', '') — Invoice Ninja</title>
+            <title>@yield('meta_title', '') — Gestoremio</title>
         @elseif(auth()->guard('contact')->check())
             <title>@yield('meta_title', '') — {{ auth()->guard('contact')->user()->client->getSetting('name') }}</title>
         @elseif(isset($company) && !is_null($company))

@@ -8,7 +8,7 @@
             @if($register_company->account && !$register_company->account->isPaid())
             <div class="flex justify-center">
                     <img src="{{ asset('images/invoiceninja-black-logo-2.png') }}"
-                         class="border-b border-gray-100 h-18 pb-4" alt="Invoice Ninja logo">
+                         class="border-b border-gray-100 h-18 pb-4" alt="Gestoremio logo">
                 </div>
             @elseif(isset($register_company) && !is_null($register_company))
             <div class="flex justify-center">

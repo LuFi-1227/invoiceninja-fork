@@ -39,7 +39,7 @@
     @if(!$whitelabel)
         <p>
             <a href="https://invoiceninja.com" target="_blank">
-                {{ __('texts.ninja_email_footer', ['site' => 'Invoice Ninja']) }}
+                {{ __('texts.ninja_email_footer', ['site' => 'Gestoremio']) }}
             </a>
         </p>
     @endif
