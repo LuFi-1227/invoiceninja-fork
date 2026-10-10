@@ -881,7 +881,8 @@ class InvoiceController extends BaseController
                     $invoice,
                     request()->input('phone'),
                     request()->input('message'),
-                    request()->has('send_pdf') ? request()->boolean('send_pdf') : null
+                    request()->has('send_pdf') ? request()->boolean('send_pdf') : null,
+                    request()->has('send_boleto') ? request()->boolean('send_boleto') : null
                 );
 
                 if (! $bulk) {

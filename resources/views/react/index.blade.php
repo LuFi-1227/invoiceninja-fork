@@ -161,5 +161,6 @@
   <body class="h-full">
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <script defer src="/whatsapp-button.js"></script>
   </body>
 </html>

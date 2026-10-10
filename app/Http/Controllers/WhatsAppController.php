@@ -15,6 +15,8 @@ namespace App\Http\Controllers;
 use App\Libraries\MultiDB;
 use App\Models\Company;
 use App\Models\Invoice;
+use App\Services\Asaas\AsaasBoletoService;
+use App\Services\Invoice\GetInvoicePdf;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -137,10 +139,110 @@ class WhatsAppController extends BaseController
         $phone = $request->input('phone');
         $customMessage = $request->input('message');
         $sendPdf = $request->has('send_pdf') ? $request->boolean('send_pdf') : null;
+        $sendBoleto = $request->has('send_boleto') ? $request->boolean('send_boleto') : null;
 
-        $result = $service->sendInvoice($invoice, $phone, $customMessage, $sendPdf);
+        $result = $service->sendInvoice($invoice, $phone, $customMessage, $sendPdf, $sendBoleto);
 
         return response()->json($result, ($result['success'] ?? false) ? 200 : 400);
+    }
+
+    /**
+     * Return the data needed to render the WhatsApp send modal
+     * (recipient, default message, generated PDF and Asaas Boleto links).
+     */
+    public function getSendOptions(Request $request, Invoice $invoice): JsonResponse
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        if ($invoice->company_id !== $user->company()->id) {
+            return response()->json(['error' => 'Acesso negado à fatura.'], 403);
+        }
+
+        $service = new WhatsAppService($user->company());
+        $config = $service->getConfig();
+
+        $hash = $invoice->hashed_id;
+
+        $boleto = null;
+        if (AsaasBoletoService::forInvoice($invoice)->isAvailable()) {
+            $boleto = [
+                'filename' => 'Boleto_' . ($invoice->number ?: $invoice->id) . '.pdf',
+                'url' => '/api/v1/invoices/' . $hash . '/whatsapp/boleto',
+            ];
+        }
+
+        return response()->json([
+            'is_configured' => $service->isConfigured(),
+            'configured_message' => $service->isConfigured()
+                ? null
+                : 'WhatsApp não configurado ou desativado. Acesse Configurações > WhatsApp para cadastrar sua EvolutionAPI ou MetaAPI.',
+            'invoice' => [
+                'id' => $hash,
+                'number' => $invoice->number ?: '#' . $invoice->id,
+            ],
+            'client_name' => $invoice->client->present()->name(),
+            'phone' => $service->getRecipientPhone($invoice),
+            'message' => $service->buildMessage($invoice),
+            'pdf' => [
+                'filename' => $invoice->getFileName(),
+                'url' => '/api/v1/invoices/' . $hash . '/whatsapp/pdf',
+            ],
+            'boleto' => $boleto,
+            'defaults' => [
+                'send_pdf' => (bool) ($config['send_pdf'] ?? false),
+                'send_boleto' => (bool) ($config['send_boleto'] ?? false),
+            ],
+        ]);
+    }
+
+    /**
+     * Stream the system generated invoice PDF so it can be previewed
+     * from the WhatsApp send modal.
+     */
+    public function showInvoicePdf(Invoice $invoice)
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        if ($invoice->company_id !== $user->company()->id) {
+            return response()->json(['error' => 'Acesso negado à fatura.'], 403);
+        }
+
+        try {
+            $pdf = (new GetInvoicePdf($invoice))->run();
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Não foi possível gerar o PDF da fatura.'], 500);
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $invoice->getFileName() . '"',
+        ]);
+    }
+
+    /**
+     * Stream the Asaas Boleto PDF so it can be previewed from the modal.
+     */
+    public function showBoletoPdf(Invoice $invoice)
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        if ($invoice->company_id !== $user->company()->id) {
+            return response()->json(['error' => 'Acesso negado à fatura.'], 403);
+        }
+
+        $boleto = AsaasBoletoService::forInvoice($invoice)->resolvePdf();
+
+        if (!$boleto || empty($boleto['pdf'])) {
+            return response()->json(['error' => 'Boleto não disponível para esta fatura.'], 404);
+        }
+
+        return response($boleto['pdf'], 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . ($boleto['filename'] ?? 'Boleto.pdf') . '"',
+        ]);
     }
 
     /**

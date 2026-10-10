@@ -55,6 +55,11 @@ class PdfService
 
     private ?string $json_design_html = null;
 
+    /**
+     * When true (design preview mode) the Asaas payment block is not injected.
+     */
+    private bool $skip_asaas_block = false;
+
     public const DELIVERY_NOTE = 'delivery_note';
     public const STATEMENT = 'statement';
     public const PURCHASE_ORDER = 'purchase_order';
@@ -90,6 +95,8 @@ class PdfService
     public function bootForPreviewDesign(array $previewDesign): self
     {
         $this->start_time = microtime(true);
+
+        $this->skip_asaas_block = true;
 
         $this->config = (new PdfConfiguration($this))->init();
 
@@ -177,13 +184,49 @@ class PdfService
                 nlog($html);
             }
 
-            return $html;
+            return $this->appendAsaasPaymentBlock($html);
         }
 
         $html = \App\Services\Pdf\Purify::clean($this->builder->document->saveHTML(), false, $inline_pdf_images);
 
         if (config('ninja.log_pdf_html')) {
             nlog($html);
+        }
+
+        return $this->appendAsaasPaymentBlock($html);
+    }
+
+    /**
+     * When the document is an invoice and the Asaas gateway is enabled, plot
+     * the Boleto barcode / "linha digitável" and the Pix QR Code on the PDF.
+     * Resolution failures never break PDF generation — they just omit the block.
+     */
+    private function appendAsaasPaymentBlock(string $html): string
+    {
+        if ($this->skip_asaas_block || stripos($html, '</body>') === false) {
+            return $html;
+        }
+
+        $entity = null;
+
+        try {
+            $entity = $this->config->entity ?? null;
+        } catch (\Throwable $e) {
+            return $html;
+        }
+
+        if (! $entity instanceof Invoice) {
+            return $html;
+        }
+
+        try {
+            $block = \App\Services\Asaas\AsaasPaymentBlock::forInvoice($entity);
+
+            if ($block) {
+                $html = str_ireplace('</body>', $block . PHP_EOL . '</body>', $html);
+            }
+        } catch (\Throwable $e) {
+            nlog('AsaasPaymentBlock inject skipped: ' . $e->getMessage());
         }
 
         return $html;
