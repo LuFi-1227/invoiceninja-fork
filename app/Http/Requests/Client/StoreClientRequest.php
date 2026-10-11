@@ -83,7 +83,9 @@ class StoreClientRequest extends Request
         $rules['country_id'] = 'integer|nullable|exists:countries,id';
         $rules['group_settings_id'] = ['bail','nullable','sometimes', Rule::exists('group_settings', 'id')->where('company_id', $user->company()->id)];
         
-        $rules['custom_value1'] = ['bail','nullable','sometimes',function ($attribute, $value, $fail) {
+        $rules['custom_value1'] = ['bail', Rule::requiredIf(function () use ($user) {
+            return ! empty(data_get($user->company()->custom_fields, 'client1'));
+        }), function ($attribute, $value, $fail) {
             if (is_array($value)) {
                 $fail("The $attribute must not be an array.");
             }
@@ -232,6 +234,7 @@ class StoreClientRequest extends Request
         return [
             'contacts.*.email.required' => ctrans('validation.email', ['attribute' => 'email']),
             'currency_code' => 'Currency code does not exist',
+            'custom_value1.required' => 'O CPF/CNPJ é obrigatório.',
         ];
     }
 

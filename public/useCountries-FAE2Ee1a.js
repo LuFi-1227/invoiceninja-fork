@@ -1,0 +1,1 @@
+import{a as e}from"./rolldown-runtime-CNC7AqOf.js";import{St as t}from"./forms-BFr2WPc7.js";import{t as n}from"./react-Augu_vA3.js";var r=e(n(),1);function i(){let{data:e}=t(),[n,i]=(0,r.useState)([]);return(0,r.useEffect)(()=>{e?.countries&&i(e.countries)},[e]),n}export{i as t};

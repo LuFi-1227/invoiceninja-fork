@@ -36,7 +36,7 @@ class CompanyFactory
         $company->settings = CompanySettings::defaults();
         $company->db = config('database.default');
         $company->custom_fields = (object) [
-            'client1' => 'CPF / CNPJ',
+            'client1' => 'CPF / CNPJ|single_line_text',
         ];
         $company->client_registration_fields = ClientRegistrationFields::generate();
 
