@@ -1,0 +1,108 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useColorScheme } from '$app/common/colors';
+import invoiceStatus from '$app/common/constants/invoice-status';
+import paymentStatus from '$app/common/constants/payment-status';
+import { date as formatDate } from '$app/common/helpers';
+import { useFormatMoney } from '$app/common/hooks/money/useFormatMoney';
+import { useCurrentCompanyDateFormats } from '$app/common/hooks/useCurrentCompanyDateFormats';
+import { Checkbox } from '$app/components/forms';
+import { StatusBadge } from '$app/components/StatusBadge';
+import { ExpenseStatus } from '$app/pages/expenses/common/components/ExpenseStatus';
+import { ResourceItem } from './ListBox';
+
+interface Props {
+  resourceItem: ResourceItem;
+  isItemChecked: boolean;
+  selectItem: (id: string, clientId?: string) => void;
+  dataKey: string;
+}
+
+export function ListBoxItem(props: Props) {
+  const formatMoney = useFormatMoney();
+
+  const { dateFormat } = useCurrentCompanyDateFormats();
+  const colors = useColorScheme();
+
+  return (
+    <li
+      style={{
+        color: colors.$3,
+        backgroundColor: props.isItemChecked ? colors.$7 : colors.$1,
+        borderColor: colors.$24,
+      }}
+      key={props.resourceItem.id}
+      className="flex justify-between w-full cursor-pointer p-4 border-b last:border-b-0"
+      onClick={() =>
+        props.selectItem(props.resourceItem.id, props.resourceItem.clientId)
+      }
+    >
+      <div className="flex space-x-2 items-center">
+        <Checkbox
+          checked={props.isItemChecked}
+          onClick={() => props.selectItem(props.resourceItem.id)}
+        />
+        <div
+          className="flex flex-col items-start"
+          style={{
+            color: colors.$3,
+          }}
+        >
+          <span className="text-sm">{props.resourceItem.name}</span>
+          <span className="text-sm">{props.resourceItem.number}</span>
+        </div>
+      </div>
+      <div className="flex items-center flex-grow pr-3">
+        <div className="flex flex-col flex-grow pl-8 pr-3">
+          <span className="text-sm" style={{ color: colors.$3 }}>
+            {props.resourceItem.clientName}
+          </span>
+          <span className="text-sm" style={{ color: colors.$3 }}>
+            {formatDate(props.resourceItem.date || '', dateFormat)}
+          </span>
+        </div>
+        {typeof props.resourceItem.amount === 'number' && (
+          <span className="text-sm" style={{ color: colors.$3 }}>
+            {formatMoney(
+              props.resourceItem.amount || 0,
+              props.resourceItem.country_id,
+              props.resourceItem.currency_id
+            )}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center" style={{ color: colors.$3 }}>
+        {props.resourceItem.statusId ? (
+          <>
+            {props.dataKey === 'invoices' && (
+              <StatusBadge
+                for={invoiceStatus}
+                code={props.resourceItem.statusId}
+              />
+            )}
+            {props.dataKey === 'payments' && (
+              <StatusBadge
+                for={paymentStatus}
+                code={props.resourceItem.statusId}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            {props.dataKey === 'expenses' && (
+              <ExpenseStatus entity={props.resourceItem} />
+            )}
+          </>
+        )}
+      </div>
+    </li>
+  );
+}

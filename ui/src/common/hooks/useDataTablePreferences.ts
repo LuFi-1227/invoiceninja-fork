@@ -1,0 +1,293 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useAtomValue } from 'jotai';
+import { isEqual } from 'lodash';
+import { Dispatch, SetStateAction, useEffect, useRef } from 'react';
+import { PerPage } from '$app/components/DataTable';
+import { SelectOption } from '$app/components/datatables/Actions';
+import { useCurrentUser } from './useCurrentUser';
+import { useDataTablePreference } from './useDataTablePreference';
+import {
+  ScopedTableFilters,
+  useScopedTableFilters,
+} from './useScopedTableFilters';
+import {
+  reactSettingsAtom,
+  useReactSettings,
+  useSaveReactSettings,
+  useUpdateReactSettings,
+} from './useReactSettings';
+import { useStoreSessionTableFilters } from './useStoreSessionTableFilters';
+
+interface Params {
+  apiEndpoint: URL;
+  customFilters?: SelectOption[];
+  defaultCustomFilterValues?: string[];
+  tableKey: string | undefined;
+  isInitialConfiguration: boolean;
+  customFilter: string[] | undefined;
+  setFilter: Dispatch<SetStateAction<string>>;
+  setCustomFilter: Dispatch<SetStateAction<string[] | undefined>>;
+  setCurrentPage: Dispatch<SetStateAction<number>>;
+  setSort: Dispatch<SetStateAction<string>>;
+  setSortedBy: Dispatch<SetStateAction<string | undefined>>;
+  setStatus: Dispatch<SetStateAction<string[]>>;
+  setPerPage: Dispatch<SetStateAction<PerPage>>;
+  setArePreferencesApplied: Dispatch<SetStateAction<boolean>>;
+  withoutStoringPerPage: boolean;
+  enableSavingFilterPreference?: boolean;
+  withoutStoringPage?: boolean;
+  withoutStoringPreferences?: boolean;
+  withRecordScopedFilters?: boolean;
+  recordScopeId?: string;
+}
+
+export function useDataTablePreferences(params: Params) {
+  const user = useCurrentUser();
+  const reactSettings = useReactSettings();
+  const updateSettings = useUpdateReactSettings();
+  const saveSettings = useSaveReactSettings();
+
+  const {
+    apiEndpoint,
+    customFilters,
+    defaultCustomFilterValues,
+    tableKey,
+    isInitialConfiguration,
+    customFilter,
+    setFilter,
+    setCustomFilter,
+    setCurrentPage,
+    setSort,
+    setSortedBy,
+    setStatus,
+    setPerPage,
+    setArePreferencesApplied,
+    withoutStoringPerPage,
+    enableSavingFilterPreference,
+    withoutStoringPage,
+    withoutStoringPreferences,
+    withRecordScopedFilters,
+    recordScopeId,
+  } = params;
+
+  const getPreference = useDataTablePreference({ tableKey });
+  const storeSessionTableFilters = useStoreSessionTableFilters({ tableKey });
+  const { scopeId, storedFilters, storeFilters } = useScopedTableFilters({
+    tableKey,
+  });
+
+  // The global toggle only gates server-side persistence. List-page text filters
+  // use session storage; overview sub-tables use scoped in-memory text per record.
+  const persistTableFilters = reactSettings.persist_table_filters !== false;
+
+  const isRecordScopeActive =
+    !recordScopeId || scopeId === recordScopeId;
+
+  const handleUpdateTableFilters = (
+    filter: string,
+    sortedBy: string | undefined,
+    sort: string,
+    currentPage: number,
+    status: string[],
+    perPage: PerPage
+  ) => {
+    if (withoutStoringPreferences) {
+      return;
+    }
+
+    if (withRecordScopedFilters) {
+      if (!isRecordScopeActive) {
+        return;
+      }
+
+      storeFilters({
+        filter,
+        customFilter,
+        status,
+        sort,
+        sortedBy,
+        perPage,
+        currentPage,
+      });
+
+      return;
+    }
+
+    if (tableKey) {
+      storeSessionTableFilters(filter, currentPage, withoutStoringPage);
+    }
+
+    if (!tableKey || !enableSavingFilterPreference) {
+      return;
+    }
+
+    // Session text filter already stored above; the toggle only skips the
+    // server-persisted status/sort/perPage/customFilter.
+    if (!persistTableFilters) {
+      return;
+    }
+
+    const currentTableFilters = reactSettings.table_filters?.[tableKey];
+    const defaultCustomFilter = defaultCustomFilterValues ?? [];
+    const currentCustomFilter = customFilter?.length
+      ? customFilter
+      : defaultCustomFilter;
+
+    const defaultFilters = {
+      ...(customFilters && { customFilter: defaultCustomFilter }),
+      sort: apiEndpoint.searchParams.get('sort') || 'id|asc',
+      status: ['active'],
+      ...(!withoutStoringPerPage && { perPage: '10' }),
+    };
+
+    const cleanedUpFilters = {
+      ...(sortedBy && { sortedBy }),
+      ...(customFilters && { customFilter: currentCustomFilter }),
+      sort,
+      status,
+      ...(!withoutStoringPerPage && { perPage }),
+    };
+
+    if (isEqual(defaultFilters, cleanedUpFilters)) {
+      if (currentTableFilters && user?.id) {
+        const tableFilters = { ...(reactSettings.table_filters ?? {}) };
+
+        Object.keys(tableFilters).forEach((key) => {
+          if (key.includes('/')) {
+            delete tableFilters[key];
+          }
+        });
+
+        delete tableFilters[tableKey];
+        saveSettings('table_filters', tableFilters);
+      }
+
+      return;
+    }
+
+    if (isEqual(currentTableFilters, cleanedUpFilters) && currentTableFilters) {
+      return;
+    }
+
+    if (!user?.id) return;
+
+    // Strip legacy URL-shaped table filter keys before persisting.
+    const tableFilters = { ...(reactSettings.table_filters ?? {}) };
+    Object.keys(tableFilters).forEach((key) => {
+      if (key.includes('/')) {
+        delete tableFilters[key];
+      }
+    });
+    updateSettings('table_filters', tableFilters);
+    saveSettings(`table_filters.${tableKey}`, cleanedUpFilters);
+  };
+
+  // Apply saved table preferences once per table key.
+  const appliedRef = useRef<boolean>(false);
+  useEffect(() => {
+    appliedRef.current = false;
+  }, [tableKey, scopeId, recordScopeId]);
+
+  const rawAtom = useAtomValue(reactSettingsAtom);
+  const isHydrated = rawAtom !== null;
+
+  const applyServerPreferences = () => {
+    if (customFilters) {
+      if ((getPreference('customFilter') as string[]).length) {
+        setCustomFilter(getPreference('customFilter') as string[]);
+      } else {
+        setCustomFilter(defaultCustomFilterValues ?? []);
+      }
+    } else {
+      setCustomFilter([]);
+    }
+    if (!withoutStoringPerPage) {
+      setPerPage((getPreference('perPage') as PerPage) || '10');
+    }
+    if (!withoutStoringPage) {
+      setCurrentPage((getPreference('currentPage') as number) || 1);
+    }
+    setSort(
+      (getPreference('sort') as string) ||
+        apiEndpoint.searchParams.get('sort') ||
+        'id|asc'
+    );
+    setSortedBy((getPreference('sortedBy') as string) || undefined);
+    if ((getPreference('status') as string[]).length) {
+      setStatus(getPreference('status') as string[]);
+    } else {
+      setStatus(['active']);
+    }
+  };
+
+  const applyScopedFilters = (filters: ScopedTableFilters) => {
+    setFilter(filters.filter ?? '');
+    setCustomFilter(filters.customFilter ?? defaultCustomFilterValues ?? []);
+    setSort(filters.sort || apiEndpoint.searchParams.get('sort') || 'id|asc');
+    setSortedBy(filters.sortedBy);
+    setStatus(filters.status?.length ? filters.status : ['active']);
+
+    if (!withoutStoringPerPage) {
+      setPerPage(filters.perPage ?? '10');
+    }
+    if (!withoutStoringPage) {
+      setCurrentPage(filters.currentPage ?? 1);
+    }
+  };
+
+  useEffect(() => {
+    // Guards logout/unmount races where the atom has been reset to null.
+    if (!isHydrated || appliedRef.current) return;
+
+    const markAsApplied = () => {
+      setArePreferencesApplied(true);
+      appliedRef.current = true;
+    };
+
+    if (withoutStoringPreferences) {
+      markAsApplied();
+      return;
+    }
+
+    if (withRecordScopedFilters) {
+      if (isRecordScopeActive && storedFilters) {
+        applyScopedFilters(storedFilters);
+      } else {
+        setFilter('');
+
+        if (persistTableFilters) {
+          applyServerPreferences();
+        } else {
+          setCustomFilter(defaultCustomFilterValues ?? []);
+        }
+      }
+
+      markAsApplied();
+      return;
+    }
+
+    if (!persistTableFilters) {
+      setFilter((getPreference('filter') as string) || '');
+      setCustomFilter([]);
+      markAsApplied();
+      return;
+    }
+
+    if (!isInitialConfiguration) {
+      setFilter((getPreference('filter') as string) || '');
+      applyServerPreferences();
+      markAsApplied();
+    }
+  }, [isInitialConfiguration, isHydrated, tableKey, scopeId, recordScopeId]);
+
+  return { handleUpdateTableFilters };
+}

@@ -1,0 +1,41 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { cloneElement, createElement, isValidElement } from 'react';
+import { Icon as ReactFeatherIcon } from 'react-feather';
+import { IconType } from 'react-icons';
+import { useColorScheme } from '$app/common/colors';
+import { useAccentColor } from '$app/common/hooks/useAccentColor';
+import CommonProps from '$app/common/interfaces/common-props.interface';
+
+interface Props extends CommonProps {
+  element: IconType | ReactFeatherIcon;
+  size?: number;
+  color?: string;
+}
+
+export function Icon(props: Props) {
+  const colors = useColorScheme();
+  const accentColor = useAccentColor();
+
+  const iconElement = createElement(props.element);
+
+  if (isValidElement(iconElement)) {
+    return cloneElement(iconElement, {
+      fontSize: props.size || 20,
+      color: props.color || accentColor,
+      className: props.className,
+      onClick: props.onClick,
+      style: props.style,
+    });
+  }
+
+  return <></>;
+}

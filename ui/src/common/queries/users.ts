@@ -1,0 +1,115 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useQuery } from '@tanstack/react-query';
+import { Dispatch, SetStateAction } from 'react';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { useAdmin } from '$app/common/hooks/permissions/useHasPermission';
+import { toast } from '../helpers/toast/toast';
+import { useOnWrongPasswordEnter } from '../hooks/useOnWrongPasswordEnter';
+import { useRefetch } from '../hooks/useRefetch';
+import { GenericQueryOptions } from './invoices';
+
+export function useUsersQuery() {
+  return useQuery({
+    queryKey: ['/api/v1/users'],
+    queryFn: () => request('GET', endpoint('/api/v1/users')),
+    staleTime: Infinity,
+  });
+}
+
+export function useUsersForDocuNinjaQuery() {
+  return useQuery({
+    queryKey: ['/api/v1/users/docuninja-eligible'],
+
+    queryFn: () =>
+      request(
+        'GET',
+        endpoint(
+          '/api/v1/users?hideOwnerUsers=true&showAccountUsers=true&status=active&sort=id|desc'
+        )
+      ),
+
+    staleTime: Infinity,
+  });
+}
+
+interface UserQueryProps extends GenericQueryOptions {
+  id: string;
+}
+
+export function useUserQuery(options: UserQueryProps) {
+  return useQuery({
+    queryKey: ['/api/v1/users', options.id],
+
+    queryFn: () =>
+      request(
+        'GET',
+        endpoint('/api/v1/users/:id?include=company_user', { id: options.id })
+      ),
+
+    enabled: options.enabled,
+    staleTime: Infinity,
+  });
+}
+
+export function useBlankUserQuery() {
+  const { isAdmin } = useAdmin();
+
+  return useQuery({
+    queryKey: ['/api/v1/users/create'],
+    queryFn: () => request('GET', endpoint('/api/v1/users/create')),
+    staleTime: Infinity,
+    enabled: isAdmin,
+  });
+}
+
+interface Params {
+  setIsPasswordConfirmModalOpen: Dispatch<SetStateAction<boolean>>;
+}
+
+export function useBulk(params: Params) {
+  const $refetch = useRefetch();
+
+  const onWrongPasswordEnter = useOnWrongPasswordEnter();
+
+  const { setIsPasswordConfirmModalOpen } = params;
+
+  return (
+    ids: string[],
+    action: 'archive' | 'restore' | 'delete',
+    password: string,
+    isPasswordRequired: boolean
+  ) => {
+    toast.processing();
+
+    request(
+      'POST',
+      endpoint('/api/v1/users/bulk'),
+      {
+        action,
+        ids,
+      },
+      { headers: { 'X-Api-Password': password }, skipIntercept: true }
+    )
+      .then(() => {
+        toast.success(`${action}d_user`);
+
+        $refetch(['users']);
+      })
+      .catch((error) => {
+        if (error.response?.status === 412) {
+          onWrongPasswordEnter(isPasswordRequired);
+          setIsPasswordConfirmModalOpen(true);
+        }
+      });
+  };
+}

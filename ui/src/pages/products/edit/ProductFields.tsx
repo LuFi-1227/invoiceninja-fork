@@ -1,0 +1,36 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '$app/common/colors';
+import { Card } from '$app/components/cards';
+import { Link } from '$app/components/forms';
+
+export default function ProductFields() {
+  const [t] = useTranslation();
+
+  const colors = useColorScheme();
+
+  return (
+    <Card
+      title={t('custom_fields')}
+      className="shadow-sm"
+      style={{ borderColor: colors.$24 }}
+      headerStyle={{ borderColor: colors.$20 }}
+    >
+      <div className="px-6">
+        <span className="text-sm">{t('custom_fields')} &nbsp;</span>
+        <Link to="/settings/custom_fields/products" className="capitalize">
+          {t('click_here')}.
+        </Link>
+      </div>
+    </Card>
+  );
+}

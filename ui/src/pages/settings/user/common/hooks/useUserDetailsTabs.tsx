@@ -1,0 +1,56 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTranslation } from 'react-i18next';
+import { isHosted } from '$app/common/helpers';
+import { Tab } from '$app/components/Tabs';
+
+export function useUserDetailsTabs() {
+  const { t } = useTranslation();
+
+  const tabs: Tab[] = [
+    { name: t('details'), href: '/settings/user_details' },
+    {
+      name: t('password'),
+      href: '/settings/user_details/password',
+    },
+    {
+      name: t('oauth_mail'),
+      href: '/settings/user_details/connect',
+      enabled: isHosted(),
+    },
+    {
+      name: t('enable_two_factor'),
+      href: '/settings/user_details/enable_two_factor',
+    },
+    {
+      name: t('accent_color'),
+      href: '/settings/user_details/accent_color',
+    },
+    {
+      name: t('notifications'),
+      href: '/settings/user_details/notifications',
+    },
+    {
+      name: t('custom_fields'),
+      href: '/settings/user_details/custom_fields',
+    },
+    {
+      name: t('preferences'),
+      href: '/settings/user_details/preferences',
+    },
+    {
+      name: t('keyboard_shortcuts'),
+      href: '/settings/user_details/keyboard_shortcuts',
+    },
+  ];
+
+  return tabs;
+}

@@ -1,0 +1,299 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTranslation } from 'react-i18next';
+import { InputField, SelectField } from '$app/components/forms';
+import { Element } from '$app/components/cards';
+import { CustomField } from '$app/components/CustomField';
+import { TaxRateSelector } from '$app/components/tax-rates/TaxRateSelector';
+import Toggle from '$app/components/forms/Toggle';
+import { Product } from '$app/common/interfaces/product';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
+import { EntityStatus } from '$app/components/EntityStatus';
+import { useSearchParams } from 'react-router-dom';
+import { NumberInputField } from '$app/components/forms/NumberInputField';
+import { useTaxCategories } from '$app/components/tax-rates/TaxCategorySelector';
+import { getTaxRateComboValue } from '$app/common/helpers/tax-rates/tax-rates-combo';
+import { ErrorMessage } from '$app/components/ErrorMessage';
+import { IncomeAccountSelector } from '$app/components/IncomeAccountSelector';
+import { TagPillSelector } from '$app/components/tags/TagPillSelector';
+import { TAG_ENTITY_TYPES } from '$app/common/interfaces/tag';
+
+interface Props {
+  type?: 'create' | 'edit';
+  product: Product;
+  errors: ValidationBag | undefined;
+  handleChange: (
+    property: keyof Product,
+    value: Product[keyof Product]
+  ) => void;
+}
+
+export function ProductForm(props: Props) {
+  const [t] = useTranslation();
+  const [, setSearchParams] = useSearchParams();
+
+  const company = useCurrentCompany();
+  const taxCategories = useTaxCategories();
+
+  const { errors, handleChange, type, product } = props;
+
+  return (
+    <>
+      {type === 'edit' && (
+        <Element leftSide={t('status')}>
+          <EntityStatus entity={product} />
+        </Element>
+      )}
+
+      <Element leftSide={t('item')} required>
+        <InputField
+          required
+          value={product.product_key}
+          onValueChange={(value) => handleChange('product_key', value)}
+          errorMessage={errors?.errors.product_key}
+        />
+      </Element>
+
+      <Element leftSide={t('description')}>
+        <InputField
+          element="textarea"
+          value={product.notes}
+          onValueChange={(value) => handleChange('notes', value)}
+          errorMessage={errors?.errors.notes}
+        />
+      </Element>
+
+      <Element leftSide={t('tags')}>
+        <TagPillSelector
+          entityType={TAG_ENTITY_TYPES.product}
+          value={product.tags || []}
+          onChange={(tags) => handleChange('tags', tags)}
+          errorMessage={errors?.errors.tags}
+        />
+      </Element>
+
+      <Element leftSide={t('price')}>
+        <NumberInputField
+          value={product.price || ''}
+          onValueChange={(value) => handleChange('price', parseFloat(value))}
+          errorMessage={errors?.errors.price}
+        />
+      </Element>
+
+      {company?.enable_product_cost && (
+        <Element leftSide={t('cost')}>
+          <NumberInputField
+            value={product.cost || ''}
+            onValueChange={(value) => handleChange('cost', parseFloat(value))}
+            errorMessage={errors?.errors.cost}
+          />
+        </Element>
+      )}
+
+      {company?.enable_product_quantity && (
+        <Element leftSide={t('default_quantity')}>
+          <NumberInputField
+            value={product.quantity || ''}
+            onValueChange={(value) =>
+              handleChange('quantity', parseFloat(value))
+            }
+            errorMessage={errors?.errors.quantity}
+          />
+        </Element>
+      )}
+
+      <Element leftSide={t('max_quantity')}>
+        <NumberInputField
+          value={product.max_quantity || ''}
+          onValueChange={(value) =>
+            handleChange('max_quantity', parseFloat(value))
+          }
+          errorMessage={errors?.errors.max_quantity}
+        />
+      </Element>
+
+      {company?.quickbooks &&
+        import.meta.env.VITE_DISABLE_QUICKBOOKS_INTEGRATION !== 'true' && (
+          <Element leftSide={t('income_account')}>
+            <IncomeAccountSelector
+              value={product.income_account_id || ''}
+              onValueChange={(value) =>
+                handleChange('income_account_id', value)
+              }
+              errorMessage={errors?.errors.income_account_id}
+            />
+          </Element>
+        )}
+
+      <Element leftSide={t('tax_category')}>
+        <SelectField
+          value={product.tax_id}
+          onValueChange={(value) => handleChange('tax_id', value)}
+          customSelector
+          dismissable={false}
+        >
+          {taxCategories.map((taxCategory, index) => (
+            <option key={index} value={taxCategory.value as string}>
+              {taxCategory.label}
+            </option>
+          ))}
+        </SelectField>
+
+        <ErrorMessage className="mt-2">{errors?.errors.tax_id}</ErrorMessage>
+      </Element>
+
+      <Element leftSide={t('image_url')}>
+        <InputField
+          value={product.product_image}
+          onValueChange={(value) => handleChange('product_image', value)}
+          errorMessage={errors?.errors.product_image}
+        />
+      </Element>
+
+      {company?.track_inventory && (
+        <>
+          <Element leftSide={t('stock_quantity')}>
+            <NumberInputField
+              value={product.in_stock_quantity || ''}
+              onValueChange={(value) => {
+                handleChange('in_stock_quantity', Number(value));
+
+                if (type === 'edit') {
+                  setSearchParams((params) => ({
+                    ...params,
+                    update_in_stock_quantity: 'true',
+                  }));
+                }
+              }}
+              errorMessage={errors?.errors.in_stock_quantity}
+            />
+          </Element>
+
+          <Element leftSide={t('stock_notifications')}>
+            <Toggle
+              checked={product.stock_notification}
+              onValueChange={(value) =>
+                handleChange('stock_notification', value)
+              }
+            />
+          </Element>
+
+          <Element leftSide={t('notification_threshold')}>
+            <NumberInputField
+              value={product.stock_notification_threshold || ''}
+              onValueChange={(value) =>
+                handleChange('stock_notification_threshold', parseFloat(value))
+              }
+              errorMessage={errors?.errors.stock_notification_threshold}
+            />
+          </Element>
+        </>
+      )}
+
+      {company && company.enabled_item_tax_rates > 0 && (
+        <Element leftSide={t('tax')}>
+          <TaxRateSelector
+            onChange={(value) => {
+              handleChange('tax_rate1', value.resource?.rate);
+              handleChange('tax_name1', value.resource?.name);
+            }}
+            defaultValue={getTaxRateComboValue(product, 'tax_name1')}
+            onClearButtonClick={() => {
+              handleChange('tax_rate1', 0);
+              handleChange('tax_name1', '');
+            }}
+            onTaxCreated={(taxRate) => {
+              handleChange('tax_rate1', taxRate.rate);
+              handleChange('tax_name1', taxRate.name);
+            }}
+          />
+        </Element>
+      )}
+
+      {company && company.enabled_item_tax_rates > 1 && (
+        <Element leftSide={t('tax')}>
+          <TaxRateSelector
+            onChange={(value) => {
+              handleChange('tax_rate2', value.resource?.rate);
+              handleChange('tax_name2', value.resource?.name);
+            }}
+            defaultValue={getTaxRateComboValue(product, 'tax_name2')}
+            onClearButtonClick={() => {
+              handleChange('tax_rate2', 0);
+              handleChange('tax_name2', '');
+            }}
+            onTaxCreated={(taxRate) => {
+              handleChange('tax_rate2', taxRate.rate);
+              handleChange('tax_name2', taxRate.name);
+            }}
+          />
+        </Element>
+      )}
+
+      {company && company.enabled_item_tax_rates > 2 && (
+        <Element leftSide={t('tax')}>
+          <TaxRateSelector
+            onChange={(value) => {
+              handleChange('tax_rate3', value.resource?.rate);
+              handleChange('tax_name3', value.resource?.name);
+            }}
+            defaultValue={getTaxRateComboValue(product, 'tax_name3')}
+            onClearButtonClick={() => {
+              handleChange('tax_rate3', 0);
+              handleChange('tax_name3', '');
+            }}
+            onTaxCreated={(taxRate) => {
+              handleChange('tax_rate3', taxRate.rate);
+              handleChange('tax_name3', taxRate.name);
+            }}
+          />
+        </Element>
+      )}
+
+      {company?.custom_fields?.product1 && (
+        <CustomField
+          field="custom_value1"
+          defaultValue={product.custom_value1}
+          value={company.custom_fields.product1}
+          onValueChange={(value) => handleChange('custom_value1', value)}
+        />
+      )}
+
+      {company?.custom_fields?.product2 && (
+        <CustomField
+          field="custom_value2"
+          defaultValue={product.custom_value2}
+          value={company.custom_fields.product2}
+          onValueChange={(value) => handleChange('custom_value2', value)}
+        />
+      )}
+
+      {company?.custom_fields?.product3 && (
+        <CustomField
+          field="custom_value3"
+          defaultValue={product.custom_value3}
+          value={company.custom_fields.product3}
+          onValueChange={(value) => handleChange('custom_value3', value)}
+        />
+      )}
+
+      {company?.custom_fields?.product4 && (
+        <CustomField
+          field="custom_value4"
+          defaultValue={product.custom_value4}
+          value={company.custom_fields.product4}
+          onValueChange={(value) => handleChange('custom_value4', value)}
+        />
+      )}
+    </>
+  );
+}

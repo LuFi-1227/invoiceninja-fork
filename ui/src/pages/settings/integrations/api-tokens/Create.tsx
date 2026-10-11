@@ -1,0 +1,135 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { AxiosError } from 'axios';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { useColorScheme } from '$app/common/colors';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { route } from '$app/common/helpers/route';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useOnWrongPasswordEnter } from '$app/common/hooks/useOnWrongPasswordEnter';
+import { $refetch } from '$app/common/hooks/useRefetch';
+import { useTitle } from '$app/common/hooks/useTitle';
+import { ApiToken } from '$app/common/interfaces/api-token';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { useBlankApiTokenQuery } from '$app/common/queries/api-tokens';
+import { Card, Element } from '$app/components/cards';
+import { InputField } from '$app/components/forms';
+import { Settings } from '$app/components/layouts/Settings';
+import { PasswordConfirmation } from '$app/components/PasswordConfirmation';
+import { useHandleChange } from './common/hooks/hooks';
+
+export function Create() {
+  const [t] = useTranslation();
+  const { documentTitle } = useTitle('new_token');
+  const navigate = useNavigate();
+
+  const colors = useColorScheme();
+
+  const pages = [
+    { name: t('settings'), href: '/settings' },
+    { name: t('account_management'), href: '/settings/account_management' },
+    { name: t('api_tokens'), href: '/settings/integrations/api_tokens' },
+    {
+      name: t('new_token'),
+      href: '/settings/integrations/api_tokens/create',
+    },
+  ];
+
+  const { data: blankApiToken } = useBlankApiTokenQuery();
+
+  const onWrongPasswordEnter = useOnWrongPasswordEnter();
+
+  const [isPasswordConfirmModalOpen, setIsPasswordConfirmModalOpen] =
+    useState<boolean>(false);
+  const [isFormBusy, setIsFormBusy] = useState<boolean>(false);
+
+  const [apiToken, setApiToken] = useState<ApiToken>();
+  const [errors, setErrors] = useState<ValidationBag>();
+
+  const handleChange = useHandleChange({ setApiToken, setErrors });
+
+  const handleSave = (password: string, isPasswordRequired: boolean) => {
+    if (!isFormBusy) {
+      setErrors(undefined);
+      toast.processing();
+      setIsFormBusy(true);
+
+      request('POST', endpoint('/api/v1/tokens'), apiToken, {
+        headers: { 'X-Api-Password': password },
+      })
+        .then((response: GenericSingleResourceResponse<ApiToken>) => {
+          toast.success('created_token');
+
+          $refetch(['tokens']);
+
+          navigate(
+            route('/settings/integrations/api_tokens/:id/edit', {
+              id: response.data.data.id,
+            })
+          );
+        })
+        .catch((error: AxiosError<ValidationBag>) => {
+          if (error.response?.status === 422) {
+            toast.dismiss();
+            setErrors(error.response.data);
+          }
+
+          if (error.response?.status === 412) {
+            onWrongPasswordEnter(isPasswordRequired);
+            setIsPasswordConfirmModalOpen(true);
+          }
+        })
+        .finally(() => setIsFormBusy(false));
+    }
+  };
+
+  useEffect(() => {
+    if (blankApiToken) {
+      setApiToken(blankApiToken);
+    }
+  }, [blankApiToken]);
+
+  return (
+    <>
+      <PasswordConfirmation
+        show={isPasswordConfirmModalOpen}
+        onClose={setIsPasswordConfirmModalOpen}
+        onSave={handleSave}
+      />
+
+      <Settings
+        title={documentTitle}
+        breadcrumbs={pages}
+        onSaveClick={() => setIsPasswordConfirmModalOpen(true)}
+        disableSaveButton={!apiToken || isFormBusy}
+      >
+        <Card
+          title={t('new_token')}
+          className="shadow-sm"
+          style={{ borderColor: colors.$24 }}
+          headerStyle={{ borderColor: colors.$20 }}
+        >
+          <Element leftSide={t('name')} required>
+            <InputField
+              required
+              onValueChange={(value) => handleChange('name', value)}
+              errorMessage={errors?.errors.name}
+            />
+          </Element>
+        </Card>
+      </Settings>
+    </>
+  );
+}

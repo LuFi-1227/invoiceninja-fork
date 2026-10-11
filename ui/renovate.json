@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    "github>whitesource/merge-confidence:beta",
+    ":preserveSemverRanges"
+  ],
+  "baseBranches": ["develop"],
+  "packageRules": [
+    {
+      "updateTypes": ["minor", "patch", "pin", "digest"]
+    }
+  ],
+  "prHourlyLimit": 1,
+  "prConcurrentLimit": 1,
+  "rangeStrategy": "auto",
+  "dependencyDashboard": false
+}

@@ -1,0 +1,56 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useQuery } from '@tanstack/react-query';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import { TransactionRule } from '$app/common/interfaces/transaction-rules';
+import { useAdmin } from '../hooks/permissions/useHasPermission';
+
+export function useBlankTransactionRuleQuery() {
+  const { isAdmin } = useAdmin();
+
+  return useQuery({
+    queryKey: ['/api/v1/bank_transaction_rules', 'create'],
+
+    queryFn: () =>
+      request('GET', endpoint('/api/v1/bank_transaction_rules/create')).then(
+        (response: GenericSingleResourceResponse<TransactionRule>) =>
+          response.data.data
+      ),
+
+    staleTime: Infinity,
+    enabled: isAdmin,
+  });
+}
+
+interface Params {
+  id: string | undefined;
+  enabled?: boolean;
+}
+
+export function useTransactionRuleQuery(params: Params) {
+  return useQuery({
+    queryKey: ['/api/v1/bank_transaction_rules', params.id],
+
+    queryFn: () =>
+      request(
+        'GET',
+        endpoint('/api/v1/bank_transaction_rules/:id', { id: params.id })
+      ).then(
+        (response: GenericSingleResourceResponse<TransactionRule>) =>
+          response.data.data
+      ),
+
+    enabled: (params.enabled ?? true) && Boolean(params.id),
+    staleTime: Infinity,
+  });
+}

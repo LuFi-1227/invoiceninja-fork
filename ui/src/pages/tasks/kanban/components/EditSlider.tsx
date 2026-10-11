@@ -1,0 +1,339 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useAtom } from 'jotai';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import styled from 'styled-components';
+import { useColorScheme } from '$app/common/colors';
+import { date as formatDate } from '$app/common/helpers';
+import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
+import { useCurrentCompanyDateFormats } from '$app/common/hooks/useCurrentCompanyDateFormats';
+import { TAG_ENTITY_TYPES } from '$app/common/interfaces/tag';
+import { Task } from '$app/common/interfaces/task';
+import { TaskStatus } from '$app/common/interfaces/task-status';
+import { ClientSelector } from '$app/components/clients/ClientSelector';
+import { Button, InputField } from '$app/components/forms';
+import { Modal } from '$app/components/Modal';
+import { ProjectSelector } from '$app/components/projects/ProjectSelector';
+import { TabGroup } from '$app/components/TabGroup';
+import { TagPillSelector } from '$app/components/tags/TagPillSelector';
+import { TaskStatusSelector } from '$app/components/task-statuses/TaskStatusSelector';
+import { UserSelector } from '$app/components/users/UserSelector';
+import { LogPosition } from '$app/pages/tasks/common/components/TaskTable';
+import {
+  duration,
+  handleTaskDurationChange,
+  parseTime,
+  parseTimeToDate,
+  useHandleTaskDateChange,
+  useHandleTaskTimeChange,
+} from '$app/pages/tasks/common/helpers';
+import {
+  calculateDifferenceBetweenLogs,
+  parseTimeLog,
+  TimeLogsType,
+} from '$app/pages/tasks/common/helpers/calculate-time';
+import { useSave } from '$app/pages/tasks/common/hooks';
+import { isTaskRunning } from '../../common/helpers/calculate-entity-state';
+import { currentTaskAtom } from '../common/atoms';
+import { useFormatTimeLog } from '../common/hooks';
+import { TaskClock } from './TaskClock';
+
+const Box = styled.div`
+  background-color: ${({ theme }) => theme.backgroundColor};
+
+  &:hover {
+    background-color: ${({ theme }) => theme.hoverBackgroundColor};
+  }
+`;
+
+export function EditSlider() {
+  const [t] = useTranslation();
+  const [task, setTask] = useAtom(currentTaskAtom);
+
+  const colors = useColorScheme();
+  const { dateFormat } = useCurrentCompanyDateFormats();
+
+  const company = useCurrentCompany();
+  const formatTimeLog = useFormatTimeLog();
+  const handleTaskTimeChange = useHandleTaskTimeChange();
+  const handleTaskDateChange = useHandleTaskDateChange();
+
+  const [isTimeModalVisible, setIsTimeModalVisible] = useState(false);
+
+  const [timeLogIndex, setTimeLogIndex] = useState<number>();
+  const [timeLog, setTimeLog] = useState<TimeLogsType>([]);
+
+  const handleChange = (property: keyof Task, value: Task[typeof property]) => {
+    setTask((current) => current && { ...current, [property]: value });
+  };
+
+  const save = useSave();
+
+  const handleDateChange = (
+    unix: number,
+    value: string,
+    index: number,
+    position: number
+  ) => {
+    handleChange(
+      'time_log',
+      handleTaskDateChange(task!.time_log, unix, value, index, position)
+    );
+  };
+
+  const handleTimeChange = (
+    unix: number,
+    time: string,
+    index: number,
+    position: number
+  ) => {
+    handleChange(
+      'time_log',
+      handleTaskTimeChange(task!.time_log, unix, time, position, index)
+    );
+  };
+
+  const handleDurationChange = (
+    value: string,
+    start: number,
+    index: number
+  ) => {
+    handleChange(
+      'time_log',
+      handleTaskDurationChange(task!.time_log, value, start, index)
+    );
+  };
+
+  useEffect(() => {
+    if (task?.time_log) {
+      setTimeLog(parseTimeLog(task.time_log));
+    }
+  }, [timeLogIndex, task?.time_log]);
+
+  return (
+    <>
+      <Modal
+        title={t('time_log')}
+        visible={isTimeModalVisible && timeLog.length > 0}
+        onClose={() => {
+          setIsTimeModalVisible(false);
+          setTimeLogIndex(undefined);
+        }}
+        overflowVisible
+      >
+        {timeLog[Number(timeLogIndex)] && (
+          <>
+            <InputField
+              label={t('start_date')}
+              type="date"
+              value={parseTimeToDate(timeLog[timeLogIndex!][LogPosition.Start])}
+              onValueChange={(value) =>
+                handleDateChange(
+                  timeLog[timeLogIndex!][LogPosition.Start],
+                  value,
+                  timeLogIndex!,
+                  LogPosition.Start
+                )
+              }
+            />
+
+            <InputField
+              label={t('start_time')}
+              type="time"
+              step="1"
+              value={parseTime(timeLog[timeLogIndex!][LogPosition.Start])}
+              onValueChange={(value) =>
+                handleTimeChange(
+                  timeLog[timeLogIndex!][LogPosition.Start],
+                  value,
+                  LogPosition.Start,
+                  timeLogIndex!
+                )
+              }
+            />
+
+            {company?.show_task_end_date && (
+              <InputField
+                label={t('end_date')}
+                type="date"
+                value={parseTimeToDate(timeLog[timeLogIndex!][LogPosition.End])}
+                onValueChange={(value) =>
+                  handleDateChange(
+                    timeLog[timeLogIndex!][LogPosition.End],
+                    value,
+                    timeLogIndex!,
+                    LogPosition.End
+                  )
+                }
+              />
+            )}
+
+            <InputField
+              type="time"
+              step="1"
+              label={t('end_time')}
+              value={parseTime(timeLog[timeLogIndex!][LogPosition.End])}
+              onValueChange={(value) =>
+                handleTimeChange(
+                  timeLog[timeLogIndex!][LogPosition.End],
+                  value,
+                  timeLogIndex!,
+                  LogPosition.End
+                )
+              }
+            />
+
+            <InputField
+              label={t('duration')}
+              debounceTimeout={1000}
+              value={duration(
+                timeLog[timeLogIndex!][LogPosition.Start],
+                timeLog[timeLogIndex!][LogPosition.End],
+                company?.show_task_end_date
+              )}
+              onValueChange={(value) =>
+                handleDurationChange(
+                  value,
+                  timeLog[timeLogIndex!][LogPosition.Start],
+                  timeLogIndex!
+                )
+              }
+            />
+          </>
+        )}
+
+        <div className="flex justify-end">
+          <Button onClick={() => setIsTimeModalVisible(false)}>
+            {t('done')}
+          </Button>
+        </div>
+      </Modal>
+
+      <TabGroup
+        tabs={[t('details'), t('times')]}
+        width="full"
+        withHorizontalPadding
+        horizontalPaddingWidth="1.5rem"
+      >
+        <div>
+          <div className="px-6 space-y-4">
+            <ClientSelector
+              inputLabel={t('client')}
+              value={task?.client_id}
+              onChange={(client) => handleChange('client_id', client.id)}
+            />
+
+            <ProjectSelector
+              inputLabel={t('project')}
+              value={task?.project_id}
+              onChange={(project) => handleChange('project_id', project.id)}
+            />
+
+            <UserSelector
+              inputLabel={t('assigned_user')}
+              value={task?.assigned_user_id}
+              onChange={(user) => handleChange('assigned_user_id', user.id)}
+            />
+
+            <InputField
+              label={t('task_number')}
+              value={task?.number}
+              onValueChange={(number) => handleChange('number', number)}
+            />
+
+            <InputField
+              label={t('rate')}
+              value={task?.rate}
+              onValueChange={(rate) => handleChange('rate', rate)}
+            />
+
+            <TaskStatusSelector
+              inputLabel={t('status')}
+              value={task?.status_id}
+              onChange={(taskStatus: TaskStatus) =>
+                taskStatus && handleChange('status_id', taskStatus.id)
+              }
+              onClearButtonClick={() => handleChange('status_id', '')}
+            />
+
+            <TagPillSelector
+              label={t('tags')}
+              entityType={TAG_ENTITY_TYPES.task}
+              value={task?.tags || []}
+              onChange={(tags) => handleChange('tags', tags)}
+            />
+
+            <InputField
+              label={t('description')}
+              element="textarea"
+              value={task?.description}
+              onValueChange={(value) => handleChange('description', value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-4 px-6 py-1 overflow-y-auto max-h-[42.5rem]">
+          {task &&
+            formatTimeLog(task.time_log).map(([date, start, end], i) => (
+              <Box
+                key={i}
+                className="flex items-center justify-between p-4 w-full shadow-sm border rounded-md cursor-pointer focus:outline-none focus:ring-0"
+                style={{ borderColor: colors.$20 }}
+                theme={{
+                  backgroundColor: colors.$1,
+                  hoverBackgroundColor: colors.$4,
+                }}
+                onClick={() => {
+                  setIsTimeModalVisible(true);
+                  setTimeLogIndex(i);
+                }}
+              >
+                <div className="flex flex-col">
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: colors.$3 }}
+                  >
+                    {formatDate(date, dateFormat)}
+                  </p>
+
+                  <span className="text-xs" style={{ color: colors.$17 }}>
+                    {start} - {end}
+                  </span>
+                </div>
+
+                <div
+                  className="text-sm font-medium"
+                  style={{ color: colors.$3 }}
+                >
+                  {isTaskRunning(task) && i === task.time_log.length - 1 ? (
+                    <TaskClock task={task} calculateLastTimeLog={true} />
+                  ) : (
+                    calculateDifferenceBetweenLogs(task.time_log, i)
+                  )}
+                </div>
+              </Box>
+            ))}
+
+          {task && formatTimeLog(task.time_log).length === 0 && (
+            <div className="text-sm font-medium">{t('no_records_found')}.</div>
+          )}
+        </div>
+      </TabGroup>
+
+      {task && formatTimeLog(task.time_log).length > 0 && (
+        <div className="flex justify-end px-6 py-4">
+          <Button onClick={() => save(task)}>{t('save')}</Button>
+        </div>
+      )}
+    </>
+  );
+}

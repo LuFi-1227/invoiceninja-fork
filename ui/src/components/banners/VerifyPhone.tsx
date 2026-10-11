@@ -1,0 +1,276 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import PhoneInput, { isPossiblePhoneNumber } from 'react-phone-number-input';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { Button, SelectField } from '../forms';
+import { Modal } from '../Modal';
+import 'react-phone-number-input/style.css';
+import { Popover } from '@headlessui/react';
+import { AxiosError } from 'axios';
+import classNames from 'classnames';
+import dayjs from 'dayjs';
+import { useDispatch } from 'react-redux';
+import { useColorScheme } from '$app/common/colors';
+import { endpoint, isHosted } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useCurrentAccount } from '$app/common/hooks/useCurrentAccount';
+import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
+import { useCurrentUser } from '$app/common/hooks/useCurrentUser';
+import { useReactSettings } from '$app/common/hooks/useReactSettings';
+import { $refetch } from '$app/common/hooks/useRefetch';
+import { CompanyUser } from '$app/common/interfaces/company-user';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import {
+  resetChanges,
+  updateCompanyUsers,
+} from '$app/common/stores/slices/company-users';
+import { ErrorMessage } from '../ErrorMessage';
+import { VerificationInput } from '../VerificationInput';
+
+interface VerificationProps {
+  visible: boolean;
+  onClose: (visible: boolean) => unknown;
+}
+
+interface ConfirmationProps extends VerificationProps {
+  onResend: () => unknown;
+  onComplete: () => unknown;
+}
+
+function Confirmation({
+  visible,
+  onClose,
+  onResend,
+  onComplete,
+}: ConfirmationProps) {
+  const [t] = useTranslation();
+  const [code, setCode] = useState<string | null>(null);
+
+  const dispatch = useDispatch();
+
+  const handleConfirmation = () => {
+    toast.processing();
+
+    request('POST', endpoint('/api/v1/verify/confirm'), {
+      code,
+    }).then(() => {
+      toast.success('verified_phone_number');
+
+      $refetch(['users', 'company_users']);
+
+      request(
+        'POST',
+        endpoint('/api/v1/refresh?updated_at=:updatedAt', {
+          updatedAt: dayjs().unix(),
+        })
+      ).then((response: GenericSingleResourceResponse<CompanyUser>) => {
+        dispatch(updateCompanyUsers(response.data.data));
+        dispatch(resetChanges('company'));
+        onComplete();
+      });
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      setCode(null);
+    };
+  }, []);
+
+  return (
+    <Modal title={t('sms_code')} visible={visible} onClose={onClose}>
+      <div className="flex justify-center">
+        <VerificationInput onComplete={setCode} />
+      </div>
+
+      <div className="flex justify-end space-x-4">
+        <Button type="minimal" onClick={onResend} behavior="button">
+          {t('resend_code')}
+        </Button>
+
+        <Button
+          onClick={handleConfirmation}
+          disabled={code === null}
+          behavior="button"
+          disableWithoutIcon
+        >
+          {t('verify')}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function Verification({ visible, onClose }: VerificationProps) {
+  const [t] = useTranslation();
+
+  const colors = useColorScheme();
+  const reactSettings = useReactSettings();
+
+  const [errors, setErrors] = useState<ValidationBag>();
+  const [number, setNumber] = useState<string>();
+  const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
+
+  const handleSms = () => {
+    setErrors(undefined);
+
+    if (!isPossiblePhoneNumber(number ?? '')) {
+      setErrors({
+        message: 'error',
+        errors: { phone: [t('invalid_phone_number')] },
+      });
+
+      return;
+    }
+
+    toast.processing();
+
+    request('POST', endpoint('/api/v1/verify'), {
+      phone: number,
+    })
+      .then(() => {
+        toast.success('code_was_sent');
+        setIsConfirmationVisible(true);
+      })
+      .catch((error: AxiosError<ValidationBag>) => {
+        if (error.response?.status === 422) {
+          toast.dismiss();
+          setErrors(error.response.data);
+        }
+      });
+  };
+
+  return (
+    <>
+      <Modal
+        title={t('verify_phone_number')}
+        visible={visible}
+        onClose={onClose}
+      >
+        <div className="flex flex-col mb-1">
+          <PhoneInput
+            className={classNames('phone-input-field', {
+              'phone-input-field-dark': reactSettings?.dark_mode,
+              'phone-input-field-light': !reactSettings?.dark_mode,
+            })}
+            international
+            placeholder={t('phone')}
+            countrySelectProps={{
+              unicodeFlags: true,
+            }}
+            defaultCountry="US"
+            value={number}
+            onChange={setNumber}
+            countrySelectComponent={({ value, options, onChange, ...rest }) => (
+              <div className="PhoneInputCountry">
+                <SelectField
+                  className="PhoneInputCountrySelect"
+                  value={value}
+                  onValueChange={(currentValue) => onChange(currentValue)}
+                >
+                  {options.map((option: { value: string; label: string }) => (
+                    <option key={option.value} value={option.value || ''}>
+                      {option.label}
+                    </option>
+                  ))}
+                </SelectField>
+
+                <div className="PhoneInputCountryIconUnicode">
+                  <rest.iconComponent country={value} />
+                </div>
+
+                <div
+                  className="PhoneInputCountrySelectArrow"
+                  style={{ color: colors.$3 }}
+                ></div>
+              </div>
+            )}
+          />
+        </div>
+
+        <ErrorMessage>{errors?.errors.phone}</ErrorMessage>
+
+        <Button
+          className="self-end"
+          behavior="button"
+          type="primary"
+          onClick={handleSms}
+          disableWithoutIcon
+        >
+          {t('send_code')}
+        </Button>
+      </Modal>
+
+      <Confirmation
+        visible={isConfirmationVisible}
+        onClose={setIsConfirmationVisible}
+        onResend={handleSms}
+        onComplete={() => {
+          setIsConfirmationVisible(false);
+          onClose(false);
+        }}
+      />
+    </>
+  );
+}
+
+export function VerifyPhone() {
+  const [t] = useTranslation();
+  const [isVerificationVisible, setIsVerificationVisible] =
+    useState<boolean>(false);
+
+  const user = useCurrentUser();
+  const account = useCurrentAccount();
+  const company = useCurrentCompany();
+
+  if (!account) {
+    return null;
+  }
+
+  if (!isHosted()) {
+    return null;
+  }
+
+  if (
+    account.account_sms_verified ||
+    !user?.email_verified_at ||
+    company?.is_disabled
+  ) {
+    return null;
+  }
+
+  return (
+    <>
+      <Popover className="relative">
+        <div className="max-w-max rounded-lg bg-[#FCD34D] px-6 py-4 shadow-lg">
+          <div className="flex items-center justify-center space-x-1">
+            <span className="text-sm">{t('verify_phone_number_help')}.</span>
+
+            <button
+              className="cursor-pointer text-sm font-semibold underline hover:no-underline"
+              onClick={() => setIsVerificationVisible(true)}
+            >
+              {t('verify_phone_number')}
+            </button>
+          </div>
+        </div>
+      </Popover>
+
+      <Verification
+        visible={isVerificationVisible}
+        onClose={setIsVerificationVisible}
+      />
+    </>
+  );
+}
