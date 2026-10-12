@@ -14,15 +14,10 @@ import { FormEvent, ReactElement, ReactNode, useState } from 'react';
 import { Info, Menu as MenuIcon } from 'react-feather';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { useColorScheme } from '$app/common/colors';
-import { isDemo, isHosted, isSelfHosted, trans } from '$app/common/helpers';
+import { trans } from '$app/common/helpers';
 import { useCurrentCompanyUser } from '$app/common/hooks/useCurrentCompanyUser';
-import { useCurrentUser } from '$app/common/hooks/useCurrentUser';
-import { usePreventNavigation } from '$app/common/hooks/usePreventNavigation';
 import { useReactSettings } from '$app/common/hooks/useReactSettings';
-import { useUnlockButtonForHosted } from '$app/common/hooks/useUnlockButtonForHosted';
-import { useUnlockButtonForSelfHosted } from '$app/common/hooks/useUnlockButtonForSelfHosted';
 import { Invoice } from '$app/common/interfaces/invoice';
 import { useSocketEvent } from '$app/common/queries/sockets';
 import { Breadcrumbs, Page } from '$app/components/Breadcrumbs';
@@ -74,19 +69,10 @@ export function Default(props: Props) {
 
   const colors = useColorScheme();
 
-  const preventNavigation = usePreventNavigation();
-
-  const user = useCurrentUser();
   const companyUser = useCurrentCompanyUser();
   const reactSettings = useReactSettings();
 
   const isMiniSidebar = Boolean(reactSettings.show_mini_sidebar);
-
-  const hostedUnlock = useUnlockButtonForHosted();
-  const selfHostedUnlock = useUnlockButtonForSelfHosted();
-
-  const shouldShowUnlockButton =
-    !isDemo() && (hostedUnlock || selfHostedUnlock);
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
@@ -129,8 +115,6 @@ export function Default(props: Props) {
       );
     },
   });
-
-  const navigate = useNavigate();
 
   return (
     <div>
@@ -190,46 +174,6 @@ export function Default(props: Props) {
 
             <div className="ml-4 flex items-center md:ml-6 space-x-2 lg:space-x-3">
               <Notifications />
-
-              {shouldShowUnlockButton && (
-                <button
-                  type="button"
-                  className="hidden sm:inline-flex items-center justify-center px-4 rounded-md text-sm font-medium text-white relative overflow-hidden"
-                  style={{
-                    height: '2.25rem',
-                    background: '#2176FF',
-                    border: '1px solid #0062ff',
-                    boxShadow:
-                      '0px 1px 1px 0px #1453B82E, 0px 2px 2px 0px #1453B829, 0px 5px 3px 0px #1453B817, 0px 9px 4px 0px #1453B808, 0px 15px 4px 0px #1453B800, 0px 1px 0px 0px #FFFFFF40 inset, 0px 0px 0px 1px #0062FF',
-                  }}
-                  onClick={() => {
-                    if (
-                      isHosted() ||
-                      import.meta.env.VITE_ENABLE_NEW_ACCOUNT_MANAGEMENT === 'true'
-                    ) {
-                      return navigate('/settings/account_management');
-                    }
-
-                    preventNavigation({
-                      url: (isSelfHosted()
-                        ? import.meta.env.VITE_WHITELABEL_INVOICE_URL ||
-                          'https://invoiceninja.invoicing.co/client/subscriptions/O5xe7Rwd7r/purchase'
-                        : user?.company_user?.ninja_portal_url) as string,
-                      externalLink: true,
-                    });
-                  }}
-                >
-                  <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-
-                  <span className="relative z-10 hidden xl:block">
-                    {isSelfHosted() ? t('white_label_button') : t('unlock_pro')}
-                  </span>
-
-                  <span className="relative z-10 xl:hidden">
-                    {t('upgrade')}
-                  </span>
-                </button>
-              )}
 
               {props.onCancelClick && (
                 <Button onClick={props.onCancelClick} type="secondary">
