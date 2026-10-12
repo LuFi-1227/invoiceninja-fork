@@ -1,0 +1,123 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useEffect, useState } from 'react';
+import { useCountryResolver } from '$app/common/helpers/country/country-resolver';
+import { useCurrencyResolver } from '$app/common/helpers/currencies/currency-resolver';
+import { Number as NumberHelper } from '$app/common/helpers/number';
+import { useClientResolver } from '$app/common/hooks/clients/useClientResolver';
+import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
+import { useVendorResolver } from '$app/common/hooks/vendors/useVendorResolver';
+import { Client } from '$app/common/interfaces/client';
+import { Country } from '$app/common/interfaces/country';
+import { Currency } from '$app/common/interfaces/currency';
+import { Vendor } from '$app/common/interfaces/vendor';
+import {
+  ProductTableResource,
+  RelationType,
+} from '../components/ProductsTable';
+
+interface Props {
+  resource: ProductTableResource | undefined;
+  relationType: RelationType;
+}
+
+export function useFormatMoney(props: Props) {
+  const company = useCurrentCompany();
+
+  const currencyResolver = useCurrencyResolver();
+  const countryResolver = useCountryResolver();
+  const vendorResolver = useVendorResolver();
+  const clientResolver = useClientResolver();
+
+  const [clientId, setClientId] = useState<string>('');
+  const [vendorId, setVendorId] = useState<string>('');
+
+  const { resource, relationType } = props;
+
+  const [country, setCountry] = useState<Country>();
+  const [currency, setCurrency] = useState<Currency>();
+
+  const [relation, setRelation] = useState<Client | Vendor>();
+
+  useEffect(() => {
+    if (clientId && relationType === 'client_id') {
+      // Use client from resource if available to avoid permission issues
+      if (resource && 'client' in resource && resource.client) {
+        setRelation(resource.client);
+      } else {
+        clientResolver
+          .find(clientId)
+          .then((client) => setRelation(client))
+          .catch(() => {
+            // Silently fail if user doesn't have view_client permission
+          });
+      }
+    }
+
+    if (vendorId && relationType === 'vendor_id') {
+      // Use vendor from resource if available to avoid permission issues
+      if (resource && 'vendor' in resource && resource.vendor) {
+        setRelation(resource.vendor);
+      } else {
+        vendorResolver
+          .find(vendorId)
+          .then((vendor) => setRelation(vendor))
+          .catch(() => {
+            // Silently fail if user doesn't have view_vendor permission
+          });
+      }
+    }
+  }, [clientId, vendorId]);
+
+  useEffect(() => {
+    resource?.vendor_id && setVendorId(resource.vendor_id);
+
+    resource?.client_id && setClientId(resource.client_id);
+  }, [resource?.client_id, resource?.vendor_id]);
+
+  useEffect(() => {
+    if (relationType === 'client_id') {
+      const client = relation as Client | undefined;
+
+      currencyResolver
+        .find(client?.settings.currency_id || company?.settings.currency_id)
+        .then((currencyResponse) => setCurrency(currencyResponse));
+
+      countryResolver
+        .find(client?.country_id || company?.settings.country_id)
+        .then((countryResponse) => setCountry(countryResponse));
+    }
+
+    if (relationType === 'vendor_id') {
+      const vendor = relation as Vendor | undefined;
+
+      currencyResolver
+        .find(vendor?.currency_id || company?.settings.currency_id)
+        .then((currencyResponse) => setCurrency(currencyResponse));
+
+      countryResolver
+        .find(vendor?.country_id || company?.settings.country_id)
+        .then((countryResponse) => setCountry(countryResponse));
+    }
+  }, [relation]);
+
+  return (value: number | string) => {
+    if (currency && country) {
+      return NumberHelper.formatMoney(
+        isNaN(Number(value)) ? 0 : value,
+        currency,
+        country
+      );
+    }
+
+    return value;
+  };
+}

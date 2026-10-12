@@ -1,0 +1,1447 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useQuery } from '@tanstack/react-query';
+import classNames from 'classnames';
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { cloneDeep, get, isEqual } from 'lodash';
+import React, {
+  CSSProperties,
+  Dispatch,
+  ReactElement,
+  ReactNode,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useTranslation } from 'react-i18next';
+import { MdArchive, MdDelete, MdEdit, MdRestore } from 'react-icons/md';
+import { useDebounce } from 'react-use';
+import { emitter } from '$app';
+import {
+  fullTableLatestDataAtom,
+  invalidationQueryAtom,
+} from '$app/common/atoms/data-table';
+import { useColorScheme } from '$app/common/colors';
+import { EntityState } from '$app/common/enums/entity-state';
+import { Guard } from '$app/common/guards/Guard';
+import {
+  docuNinjaEndpoint,
+  endpoint,
+  getEntityState,
+  isProduction,
+} from '$app/common/helpers';
+import {
+  buildDateRangeQueryParameter,
+  normalizeColumnName,
+} from '$app/common/helpers/data-table';
+import { request } from '$app/common/helpers/request';
+import { route } from '$app/common/helpers/route';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useDataTableOptions } from '$app/common/hooks/useDataTableOptions';
+import { useDataTablePreferences } from '$app/common/hooks/useDataTablePreferences';
+import { useDataTableUtilities } from '$app/common/hooks/useDataTableUtilities';
+import { useReactSettings } from '$app/common/hooks/useReactSettings';
+import { refetchByUrl } from '$app/common/hooks/useRefetch';
+import CommonProps from '$app/common/interfaces/common-props.interface';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import { Divider } from './cards/Divider';
+import { Actions, SelectOption } from './datatables/Actions';
+import { DateRangePicker } from './datatables/DateRangePicker';
+import { Dropdown } from './dropdown/Dropdown';
+import { DropdownElement } from './dropdown/DropdownElement';
+import { FilterColumn } from './FilterColumn';
+import { Button, Checkbox } from './forms';
+import { Icon } from './icons/Icon';
+import { Resource } from './PreviousNextNavigation';
+import { Spinner } from './Spinner';
+import {
+  ColumnSortPayload,
+  MemoizedTr,
+  Pagination,
+  Table,
+  Tbody,
+  Td,
+  Th,
+  Thead,
+} from './tables';
+import { TFooter } from './tables/TFooter';
+
+export interface DateRangeColumn {
+  column: string;
+  queryParameterKey: string;
+  includeColumnNameInQuery?: boolean;
+}
+
+export interface DateRangeEntry {
+  column: string;
+  startDate: string;
+  endDate: string;
+  current: boolean;
+}
+
+export type DataTableColumns<T = any> = {
+  column?: string;
+  id: string;
+  label: string;
+  format?: (field: string | number, resource: T) => unknown;
+  sortKey?: string;
+}[];
+
+export type FooterColumns<T = any> = {
+  column: string;
+  id: string;
+  label: string;
+  format: (
+    field: (string | number)[],
+    resource: T[]
+  ) => ReactNode | string | number;
+}[];
+
+type CustomBulkActionContext<T> = {
+  selectedIds: string[];
+  selectedResources: T[];
+  setSelected: Dispatch<SetStateAction<string[]>>;
+};
+
+export type CustomBulkAction<T> = (
+  ctx: CustomBulkActionContext<T>
+) => ReactNode;
+
+interface StyleOptions {
+  withoutBottomBorder?: boolean;
+  withoutTopBorder?: boolean;
+  withoutLeftBorder?: boolean;
+  withoutRightBorder?: boolean;
+  headerBackgroundColor?: string;
+  thChildrenClassName?: string;
+  tBodyStyle?: CSSProperties;
+  thClassName?: string;
+  tdClassName?: string;
+  thStyle?: CSSProperties;
+  withoutThVerticalPadding?: boolean;
+  useOnlyCurrentSortDirectionIcon?: boolean;
+  thTextSize?: 'extraSmall' | 'small';
+  disableThUppercase?: boolean;
+  descIcon?: ReactNode;
+  ascIcon?: ReactNode;
+  withoutTdPadding?: boolean;
+}
+
+export interface FilterOption {
+  label: string;
+  value: string;
+}
+
+export interface FilterColumn {
+  query_identifier: string;
+  options: FilterOption[];
+  column_id: string;
+}
+
+interface Props<T> extends CommonProps {
+  resource: string;
+  columns: DataTableColumns;
+  endpoint: string;
+  linkToCreate?: string;
+  linkToEdit?: string;
+  withResourcefulActions?: ReactNode[] | boolean;
+  bulkRoute?: string;
+  customActions?: any;
+  bottomActionsKeys?: string[];
+  customBulkActions?: CustomBulkAction<T>[];
+  customFilters?: SelectOption[];
+  customFilterPlaceholder?: string;
+  defaultCustomFilterValues?: string[];
+  withoutActions?: boolean;
+  withoutPagination?: boolean;
+  rightSide?: ReactNode;
+  withoutPadding?: boolean;
+  staleTime?: number;
+  onTableRowClick?: (resource: T) => unknown;
+  showRestore?: (resource: T) => boolean;
+  showEdit?: (resource: T) => boolean;
+  beforeFilter?: ReactNode;
+  styleOptions?: StyleOptions;
+  linkToCreateGuards?: Guard[];
+  onBulkActionSuccess?: (
+    resource: T[],
+    action: 'archive' | 'delete' | 'restore'
+  ) => void;
+  onBulkActionCall?: (
+    selectedIds: string[],
+    action: 'archive' | 'restore' | 'delete'
+  ) => void;
+  hideEditableOptions?: boolean;
+  dateRangeColumns?: DateRangeColumn[];
+  excludeColumns?: string[];
+  methodType?: 'GET' | 'POST';
+  showArchive?: (resource: T) => boolean;
+  showDelete?: (resource: T) => boolean;
+  withoutDefaultBulkActions?: boolean;
+  withoutStatusFilter?: boolean;
+  queryIdentificator?: string;
+  disableQuery?: boolean;
+  footerColumns?: FooterColumns;
+  withoutPerPageAsPreference?: boolean;
+  withoutPageAsPreference?: boolean;
+  withoutStoringPreferences?: boolean;
+  withRecordScopedFilters?: boolean;
+  recordScopeId?: string;
+  withoutSortQueryParameter?: boolean;
+  showRestoreBulk?: (selectedResources: T[]) => boolean;
+  enableSavingFilterPreference?: boolean;
+  applyManualHeight?: boolean;
+  onDeleteBulkAction?: (selectedIds: string[]) => void;
+  filterColumns?: FilterColumn[];
+  withoutAllBulkActions?: boolean;
+  onSelectedResourcesChange?: (selectedResources: T[]) => void;
+  preSelected?: string[];
+  emptyState?: ReactNode;
+  beforeFilterInput?: ReactNode;
+  withoutBottomRounding?: boolean;
+  withoutBottomPadding?: boolean;
+  useDocuNinjaApi?: boolean;
+  endpointHeaders?: Record<string, string>;
+  totalPagesPropPath?: string;
+  totalRecordsPropPath?: string;
+  withoutActionBulkPayloadPropertyForDeleteAction?: boolean;
+  withoutIdsBulkPayloadPropertyForDeleteAction?: boolean;
+  useDeleteMethod?: boolean;
+  deleteBulkRoute?: string;
+  useRestoreForDeletedResources?: boolean;
+  disabledCreateButton?: boolean;
+  filterParameterKey?: 'filter' | 'search';
+  enableSavingLatestDataForNavigation?: boolean;
+}
+
+export type ResourceAction<T> = (resource: T) => ReactElement;
+
+export type PerPage = '10' | '50' | '100';
+
+export const dateRangeAtom = atom<DateRangeEntry[]>([]);
+export const dataTableSelectedAtom = atom<Record<string, string[]>>({});
+export const filterColumnsValuesAtom = atom<Record<string, string[]>>({});
+
+function DataTableCheckbox({
+  resourceId,
+  resource,
+  dataLength,
+}: {
+  resourceId?: string;
+  resource: string;
+  dataLength?: number;
+}) {
+  const selected = useAtomValue(dataTableSelectedAtom);
+
+  if (resourceId) {
+    return (
+      <Checkbox
+        checked={selected?.[resource]?.includes(resourceId)}
+        className="child-checkbox"
+        value={resourceId}
+        id={resourceId}
+        cypressRef="dataTableCheckbox"
+      />
+    );
+  }
+
+  return (
+    <Checkbox
+      checked={selected?.[resource]?.length === dataLength && dataLength > 0}
+    />
+  );
+}
+
+export function DataTable<T extends object>(props: Props<T>) {
+  const [t] = useTranslation();
+
+  const colors = useColorScheme();
+  const options = useDataTableOptions();
+  const reactSettings = useReactSettings();
+
+  // Memoize style object to prevent MemoizedTr prop changes
+  const tableBorderStyle = useMemo(
+    () => ({ borderColor: colors.$20 }),
+    [colors.$20]
+  );
+
+  const [apiEndpoint, setApiEndpoint] = useState(
+    new URL(
+      props.useDocuNinjaApi
+        ? docuNinjaEndpoint(props.endpoint)
+        : endpoint(props.endpoint)
+    )
+  );
+
+  const setInvalidationQueryAtom = useSetAtom(invalidationQueryAtom);
+  const setFullTableLatestDataAtom = useSetAtom(fullTableLatestDataAtom);
+
+  const {
+    styleOptions,
+    customFilters,
+    defaultCustomFilterValues,
+    onBulkActionCall,
+    hideEditableOptions = false,
+    dateRangeColumns = [],
+    excludeColumns = [],
+    methodType = 'GET',
+    queryIdentificator,
+    disableQuery,
+    footerColumns = [],
+    bottomActionsKeys = [],
+    withoutPerPageAsPreference = false,
+    withoutSortQueryParameter = false,
+    showRestoreBulk,
+    enableSavingFilterPreference = false,
+    totalPagesPropPath,
+    totalRecordsPropPath,
+    onDeleteBulkAction,
+    withoutPageAsPreference = false,
+    withoutStoringPreferences = false,
+    withRecordScopedFilters = false,
+    recordScopeId,
+    filterColumns,
+    onSelectedResourcesChange,
+    preSelected = [],
+    emptyState,
+    beforeFilterInput,
+    withoutBottomRounding = false,
+    withoutBottomPadding = false,
+    withoutActionBulkPayloadPropertyForDeleteAction = false,
+    withoutIdsBulkPayloadPropertyForDeleteAction = false,
+    useDeleteMethod = false,
+    deleteBulkRoute,
+    useRestoreForDeletedResources = false,
+    disabledCreateButton = false,
+    filterParameterKey = 'filter',
+    enableSavingLatestDataForNavigation = false,
+  } = props;
+
+  const companyUpdateTimeOut = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const [filter, setFilter] = useState<string>('');
+  const [customFilter, setCustomFilter] = useState<string[] | undefined>(
+    defaultCustomFilterValues
+  );
+  const [currentPage, setCurrentPage] = useState<number>(
+    Number(apiEndpoint.searchParams.get('page')) || 1
+  );
+  const [perPage, setPerPage] = useState<PerPage>(
+    (apiEndpoint.searchParams.get('per_page') as PerPage) || '10'
+  );
+  const [sort, setSort] = useState<string>(
+    apiEndpoint.searchParams.get('sort') || 'id|asc'
+  );
+  const [sortedBy, setSortedBy] = useState<string | undefined>(undefined);
+  const [status, setStatus] = useState<string[]>(
+    apiEndpoint.searchParams.get('status')?.split(',') || ['active']
+  );
+  const [dateRangeEntries, setDateRangeEntries] = useAtom(dateRangeAtom);
+  const [dateRangeQueryParameter, setDateRangeQueryParameter] =
+    useState<string>('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const setGlobalSelected = useSetAtom(dataTableSelectedAtom);
+
+  const [isInitialConfiguration, setIsInitialConfiguration] =
+    useState<boolean>(true);
+  const [arePreferencesApplied, setArePreferencesApplied] =
+    useState<boolean>(false);
+  const [currentData, setCurrentData] = useState<T[]>([]);
+  const [areRowsRendered, setAreRowsRendered] = useState<boolean>(false);
+  const [filterColumnsValues, setFilterColumnsValues] = useAtom(
+    filterColumnsValuesAtom
+  );
+  const [selectedResources, setSelectedResources] = useState<T[]>([]);
+
+  const setStatusIfChanged = useCallback<Dispatch<SetStateAction<string[]>>>(
+    (value) => {
+      setStatus((current) => {
+        const next = value instanceof Function ? value(current) : value;
+
+        return isEqual(current, next) ? current : next;
+      });
+    },
+    []
+  );
+
+  const setCustomFilterIfChanged = useCallback<
+    Dispatch<SetStateAction<string[] | undefined>>
+  >((value) => {
+    setCustomFilter((current) => {
+      const next = value instanceof Function ? value(current) : value;
+
+      return isEqual(current ?? [], next ?? []) ? current : next;
+    });
+  }, []);
+
+  const { handleUpdateTableFilters } = useDataTablePreferences({
+    apiEndpoint,
+    isInitialConfiguration,
+    customFilter,
+    setCurrentPage,
+    setCustomFilter: setCustomFilterIfChanged,
+    setFilter,
+    setPerPage,
+    setSort,
+    setSortedBy,
+    setStatus: setStatusIfChanged,
+    setArePreferencesApplied,
+    tableKey: `${props.resource}s`,
+    customFilters,
+    defaultCustomFilterValues,
+    withoutStoringPerPage: withoutPerPageAsPreference,
+    withoutStoringPage: withoutPageAsPreference,
+    withoutStoringPreferences,
+    withRecordScopedFilters,
+    recordScopeId,
+    enableSavingFilterPreference,
+  });
+
+  const {
+    defaultOptions,
+    defaultCustomFilterOptions,
+    handleChangingCustomFilters,
+  } = useDataTableUtilities({
+    apiEndpoint,
+    isInitialConfiguration,
+    tableKey: `${props.resource}s`,
+    customFilter,
+    customFilters,
+    defaultCustomFilterValues,
+    withoutStoringPreferences,
+    withRecordScopedFilters,
+  });
+
+  const normalizeNumericCommas = (value: string): string => {
+    return value.replace(/(\d),(\d)/g, '$1.$2');
+  };
+
+  useEffect(() => {
+    const queryParam = buildDateRangeQueryParameter(dateRangeEntries);
+
+    setDateRangeQueryParameter((prev) => {
+      if (prev !== queryParam) {
+        return queryParam;
+      }
+
+      return prev;
+    });
+  }, [dateRangeEntries]);
+
+  useEffect(() => {
+    const propsUrl = new URL(
+      props.useDocuNinjaApi
+        ? docuNinjaEndpoint(props.endpoint)
+        : endpoint(props.endpoint)
+    );
+
+    propsUrl.searchParams.forEach((value, key) => {
+      if (
+        !['per_page', 'page', filterParameterKey, 'sort', 'status'].includes(
+          key
+        )
+      ) {
+        apiEndpoint.searchParams.set(key, value);
+      }
+    });
+
+    if (!isInitialConfiguration) {
+      clearTimeout(companyUpdateTimeOut.current);
+
+      const currentTimeout = setTimeout(
+        () =>
+          handleUpdateTableFilters(
+            filter,
+            sortedBy,
+            sort,
+            currentPage,
+            status,
+            perPage
+          ),
+        1500
+      );
+
+      companyUpdateTimeOut.current = currentTimeout;
+    }
+
+    apiEndpoint.searchParams.set('per_page', perPage);
+    apiEndpoint.searchParams.set('page', currentPage.toString());
+    apiEndpoint.searchParams.set(
+      filterParameterKey,
+      filter.length ? normalizeNumericCommas(filter) : filter
+    );
+
+    handleChangingCustomFilters();
+
+    if (
+      !withoutSortQueryParameter ||
+      (withoutSortQueryParameter && sort !== 'id|asc')
+    ) {
+      apiEndpoint.searchParams.set('sort', sort);
+    }
+
+    const customStatusValues = (customFilters || [])
+      .filter(
+        (currentFilter) =>
+          currentFilter.queryKey === 'status' &&
+          customFilter?.includes(currentFilter.value)
+      )
+      .map((currentFilter) => currentFilter.value);
+
+    const mergedStatusValues = Array.from(
+      new Set([...(status as string[]), ...customStatusValues])
+    );
+
+    apiEndpoint.searchParams.set('status', mergedStatusValues.join(','));
+
+    dateRangeColumns.forEach((dateRangeColumn) => {
+      apiEndpoint.searchParams.delete(dateRangeColumn.queryParameterKey);
+    });
+
+    if (dateRangeColumns.length) {
+      dateRangeEntries
+        .filter(
+          (entry) => entry.startDate.length > 0 && entry.endDate.length > 0
+        )
+        .forEach((entry) => {
+          const currentDateRangeColumn = dateRangeColumns.find(
+            (column) => column.column === entry.column
+          );
+
+          if (currentDateRangeColumn) {
+            if (currentDateRangeColumn.includeColumnNameInQuery) {
+              apiEndpoint.searchParams.set(
+                currentDateRangeColumn.queryParameterKey,
+                `${entry.column},${entry.startDate},${entry.endDate}`
+              );
+            } else {
+              apiEndpoint.searchParams.set(
+                currentDateRangeColumn.queryParameterKey,
+                `${entry.startDate},${entry.endDate}`
+              );
+            }
+          }
+        });
+    }
+
+    if (Object.keys(filterColumnsValues).length) {
+      (filterColumns || []).forEach((filterColumn) => {
+        if (filterColumnsValues[filterColumn.column_id]) {
+          apiEndpoint.searchParams.set(
+            filterColumn.query_identifier,
+            filterColumnsValues[filterColumn.column_id].join(',')
+          );
+        }
+      });
+    }
+
+    setApiEndpoint(apiEndpoint);
+
+    isInitialConfiguration && setIsInitialConfiguration(false);
+
+    return () => {
+      isProduction() && setInvalidationQueryAtom(undefined);
+    };
+  }, [
+    perPage,
+    currentPage,
+    filter,
+    sort,
+    status,
+    customFilter,
+    dateRangeQueryParameter,
+    filterColumns,
+    filterColumnsValues,
+    props.endpoint,
+  ]);
+
+  useEffect(() => {
+    setGlobalSelected((current) => ({
+      ...current,
+      [props.resource]: selected,
+    }));
+
+    currentData.forEach((resource: any) => {
+      const row = document.querySelector(
+        `tr[row-id="${resource.id}"]`
+      ) as HTMLElement;
+
+      if (row) {
+        if (selected.includes(resource.id)) {
+          row.style.backgroundColor = colors.$7;
+        } else {
+          row.style.backgroundColor = 'transparent';
+        }
+      }
+    });
+  }, [selected, props.resource]);
+
+  useEffect(() => {
+    return () => {
+      setSelected([]);
+      setDateRangeEntries([]);
+      setDateRangeQueryParameter('');
+      setGlobalSelected((current) => ({
+        ...current,
+        [props.resource]: [],
+      }));
+    };
+  }, []);
+
+  const { data, isLoading, isFetching, isError } = useQuery({
+    queryKey: [
+      ...(queryIdentificator ? [queryIdentificator] : []),
+      apiEndpoint.pathname,
+      props.endpoint,
+      perPage,
+      currentPage,
+      filter,
+      sort,
+      status,
+      customFilter,
+      ...(dateRangeQueryParameter.length > 0 ? [dateRangeQueryParameter] : []),
+      filterColumnsValues,
+    ],
+
+    queryFn: () =>
+      request(
+        methodType,
+        apiEndpoint.href,
+        {},
+        { headers: props.endpointHeaders }
+      ),
+
+    staleTime: props.staleTime ?? Infinity,
+    enabled: !disableQuery && arePreferencesApplied,
+  });
+
+  useEffect(() => {
+    if (!selected?.length) {
+      setSelectedResources([]);
+      return;
+    }
+
+    setSelectedResources((prevSelected) => {
+      const fromCurrent = currentData.filter((resource: T) =>
+        selected?.includes(resource?.['id' as keyof T] as string)
+      );
+
+      const fromPrevious = prevSelected.filter((resource: T) => {
+        const id = resource?.['id' as keyof T] as string;
+        return (
+          selected.includes(id) &&
+          !currentData.some((r: T) => r?.['id' as keyof T] === id)
+        );
+      });
+
+      return [...fromPrevious, ...fromCurrent];
+    });
+  }, [currentData, selected]);
+
+  const showRestoreBulkAction = () => {
+    return selectedResources.every(
+      (resource: T) => getEntityState(resource) !== EntityState.Active
+    );
+  };
+
+  const bulk = (action: 'archive' | 'restore' | 'delete', id?: string) => {
+    toast.processing();
+
+    const method = 'POST';
+
+    const route =
+      useDeleteMethod && action === 'delete'
+        ? deleteBulkRoute
+        : (props.bulkRoute ?? `${props.endpoint}/bulk`);
+
+    const updatedIds = { ids: id ? [id] : Array.from(selected) };
+
+    request(
+      method,
+      props.useDocuNinjaApi
+        ? docuNinjaEndpoint(route as string, { id })
+        : endpoint(route as string),
+      {
+        action: action,
+        ...updatedIds,
+      },
+      { headers: props.endpointHeaders }
+    )
+      .then((response: GenericSingleResourceResponse<T[]>) => {
+        toast.success(`${action}d_${props.resource}`);
+
+        props.onBulkActionSuccess?.(response.data.data, action);
+
+        window.dispatchEvent(
+          new CustomEvent('invalidate.combobox.queries', {
+            detail: {
+              url: props.useDocuNinjaApi
+                ? docuNinjaEndpoint(props.endpoint)
+                : endpoint(props.endpoint),
+            },
+          })
+        );
+      })
+      .finally(() => {
+        refetchByUrl([props.endpoint, apiEndpoint.pathname]);
+        setSelected([]);
+      });
+  };
+
+  const showCustomBulkActionDivider = useMemo(() => {
+    return props.customBulkActions
+      ? props.customBulkActions.some((action) =>
+          React.isValidElement(
+            action({
+              selectedIds: selected,
+              selectedResources,
+              setSelected,
+            })
+          )
+        )
+      : false;
+  }, [props.customBulkActions, selected, selectedResources]);
+
+  const showCustomActionDivider = (resource: T) => {
+    return props.customActions
+      ? props.customActions.some((action: ResourceAction<T>) =>
+          React.isValidElement(action(resource))
+        )
+      : false;
+  };
+
+  const handleDateRangeColumnClick = (columnId: string) => {
+    setDateRangeEntries((current) => {
+      const currentColumnIndex = current.findIndex(
+        (entry) => entry.column === columnId
+      );
+
+      if (currentColumnIndex !== -1) {
+        return current.map((entry, index) => ({
+          ...entry,
+          current: index === currentColumnIndex,
+        }));
+      }
+
+      return [
+        ...current.map((entry) => ({ ...entry, current: false })),
+        {
+          column: columnId,
+          startDate: '',
+          endDate: '',
+          current: true,
+        },
+      ];
+    });
+  };
+
+  const handleDateRangeChange = useCallback(
+    (columnId: string, startDate: string, endDate: string) => {
+      setDateRangeEntries((current) => {
+        if (startDate.length === 0 && endDate.length === 0) {
+          return current.filter((entry) => entry.column !== columnId);
+        }
+
+        const existingIndex = current.findIndex(
+          (entry) => entry.column === columnId
+        );
+
+        if (existingIndex !== -1) {
+          return current.map((entry) =>
+            entry.column === columnId ? { ...entry, startDate, endDate } : entry
+          );
+        }
+
+        return [
+          ...current,
+          {
+            column: columnId,
+            startDate,
+            endDate,
+            current: true,
+          },
+        ];
+      });
+    },
+    [setDateRangeEntries]
+  );
+
+  const getDateRangeEntryForColumn = useCallback(
+    (columnId: string): DateRangeEntry | undefined => {
+      return dateRangeEntries.find((entry) => entry.column === columnId);
+    },
+    [dateRangeEntries]
+  );
+
+  const getFooterColumn = (columnKey: string | undefined) => {
+    if (!columnKey) {
+      return undefined;
+    }
+
+    return footerColumns.find(
+      (footerColumn) =>
+        normalizeColumnName(footerColumn.column) ===
+        normalizeColumnName(columnKey)
+    );
+  };
+
+  const getColumnValues = (columnId: string) => {
+    return currentData.map(
+      (resource: T) => resource[columnId as keyof typeof resource]
+    ) as (string | number)[];
+  };
+
+  const handleCheckboxClick = useCallback(
+    (id: string) => {
+      setSelected((current) =>
+        current.includes(id)
+          ? current.filter((v) => v !== id)
+          : [...current, id]
+      );
+    },
+    [selected]
+  );
+
+  const handleAllCheckboxClick = useCallback(() => {
+    if (currentData.length === 0) {
+      setSelected([]);
+    } else if (
+      selected.length === currentData.length &&
+      currentData.length > 0
+    ) {
+      setSelected([]);
+    } else {
+      setSelected(currentData.map((resource: any) => resource.id) || []);
+    }
+  }, [selected, currentData]);
+
+  useEffect(() => {
+    setInvalidationQueryAtom(apiEndpoint.pathname);
+  }, [apiEndpoint.pathname]);
+
+  useEffect(() => {
+    if (currentData.length && enableSavingLatestDataForNavigation) {
+      setFullTableLatestDataAtom({
+        type: props.resource,
+        resources: currentData as unknown as Resource[],
+      });
+    }
+  }, [currentData]);
+
+  useDebounce(
+    () => {
+      if (data && !isFetching) {
+        setCurrentData(data.data.data);
+      }
+    },
+    10,
+    [data, isFetching]
+  );
+
+  useEffect(() => {
+    if (isLoading) {
+      setCurrentData([]);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
+    setAreRowsRendered(false);
+  }, [
+    queryIdentificator,
+    apiEndpoint.pathname,
+    props.endpoint,
+    perPage,
+    currentPage,
+    filter,
+    sort,
+    status,
+    customFilter,
+    dateRangeQueryParameter,
+  ]);
+
+  useEffect(() => {
+    const hasAnyCompleteDateRange = dateRangeEntries.some(
+      (entry) => entry.startDate.length > 0 && entry.endDate.length > 0
+    );
+
+    if (!hasAnyCompleteDateRange) {
+      setAreRowsRendered(true);
+    }
+  }, [dateRangeEntries]);
+
+  useEffect(() => {
+    if (isFetching || isLoading) {
+      setAreRowsRendered(false);
+      setCurrentData([]);
+    }
+  }, [isFetching, isLoading]);
+
+  useEffect(() => {
+    setAreRowsRendered(false);
+  }, [data]);
+
+  useEffect(() => {
+    if (!currentData.length && !isLoading && !isFetching) {
+      setCurrentPage(1);
+    }
+
+    if (perPage === '10') {
+      setAreRowsRendered(true);
+    }
+
+    if (perPage === '50') {
+      setTimeout(() => {
+        setAreRowsRendered(true);
+      }, 50);
+    }
+
+    if (perPage === '100') {
+      setTimeout(() => {
+        setAreRowsRendered(true);
+      }, 150);
+    }
+  }, [currentData]);
+
+  useEffect(() => {
+    if (
+      Number(perPage) < selected.length ||
+      Number(perPage) === selected.length
+    ) {
+      setSelected(
+        currentData
+          .map((resource: any) => resource.id)
+          .filter((resourceId: string) => selected.includes(resourceId)) || []
+      );
+    }
+  }, [currentData, perPage]);
+
+  useEffect(() => {
+    emitter.on('bulk.completed', () => setSelected([]));
+  }, []);
+
+  useEffect(() => {
+    const handleDeselectResource = (id: string) => {
+      setSelected((current) => current.filter((v) => v !== id));
+    };
+
+    emitter.on('deselect.resource', handleDeselectResource);
+
+    return () => {
+      emitter.off('deselect.resource', handleDeselectResource);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (preSelected?.length && isInitialConfiguration) {
+      setSelected(cloneDeep(preSelected));
+    }
+  }, [preSelected, isInitialConfiguration]);
+
+  useEffect(() => {
+    onSelectedResourcesChange?.(selectedResources);
+  }, [selectedResources]);
+
+  return (
+    <div data-cy="dataTable">
+      {!props.withoutActions && (
+        <Actions
+          filter={filter}
+          onFilterChange={setFilter}
+          optionsMultiSelect={true}
+          options={options}
+          defaultOptions={defaultOptions}
+          defaultCustomFilterOptions={defaultCustomFilterOptions}
+          onStatusChange={setStatusIfChanged}
+          customFilters={props.customFilters}
+          customFilterPlaceholder={props.customFilterPlaceholder}
+          onCustomFilterChange={setCustomFilterIfChanged}
+          customFilter={customFilter}
+          rightSide={
+            <>
+              {props.rightSide}
+
+              {props.linkToCreate && (
+                <Guard
+                  type="component"
+                  guards={props.linkToCreateGuards || []}
+                  component={
+                    <Button
+                      to={props.linkToCreate}
+                      className="shadow-sm"
+                      disabled={disabledCreateButton}
+                      disableWithoutIcon
+                    >
+                      {t(`new_${props.resource}`)}
+                    </Button>
+                  }
+                />
+              )}
+            </>
+          }
+          beforeFilter={props.beforeFilter}
+          withoutStatusFilter={props.withoutStatusFilter}
+          beforeFilterInput={beforeFilterInput}
+        >
+          {Boolean(
+            !hideEditableOptions &&
+              selectedResources.length &&
+              !props.withoutAllBulkActions
+          ) && (
+            <Dropdown
+              label={t('actions')}
+              disabled={!selected.length}
+              cypressRef="bulkActionsDropdown"
+              triggerCypressRef="bulkActionsTrigger"
+            >
+              {props.customBulkActions &&
+                props.customBulkActions.map(
+                  (bulkAction: CustomBulkAction<T>, index: number) => (
+                    <div key={index}>
+                      {bulkAction({
+                        selectedIds: selected,
+                        selectedResources,
+                        setSelected,
+                      })}
+                    </div>
+                  )
+                )}
+
+              {props.customBulkActions && showCustomBulkActionDivider && (
+                <Divider withoutPadding />
+              )}
+
+              {!props.withoutDefaultBulkActions && (
+                <DropdownElement
+                  onClick={() => {
+                    if (onBulkActionCall) {
+                      onBulkActionCall(selected, 'archive');
+                    } else {
+                      bulk('archive');
+                    }
+                  }}
+                  icon={<Icon element={MdArchive} />}
+                >
+                  {t('archive')}
+                </DropdownElement>
+              )}
+
+              {!props.withoutDefaultBulkActions && (
+                <DropdownElement
+                  onClick={() => {
+                    if (onDeleteBulkAction) {
+                      onDeleteBulkAction(selected);
+                    } else if (onBulkActionCall) {
+                      onBulkActionCall(selected, 'delete');
+                    } else {
+                      bulk('delete');
+                    }
+                  }}
+                  icon={<Icon element={MdDelete} />}
+                >
+                  {t('delete')}
+                </DropdownElement>
+              )}
+
+              {!props.withoutDefaultBulkActions &&
+                (showRestoreBulk
+                  ? showRestoreBulk(selectedResources)
+                  : showRestoreBulkAction()) && (
+                  <DropdownElement
+                    onClick={() => {
+                      if (onBulkActionCall) {
+                        onBulkActionCall(selected, 'restore');
+                      } else {
+                        bulk('restore');
+                      }
+                    }}
+                    icon={<Icon element={MdRestore} />}
+                  >
+                    {t('restore')}
+                  </DropdownElement>
+                )}
+            </Dropdown>
+          )}
+        </Actions>
+      )}
+
+      {currentData.length === 0 && !isLoading && !isFetching && emptyState ? (
+        emptyState
+      ) : (
+        <Table
+          className={props.className}
+          withoutPadding={props.withoutPadding}
+          withoutBottomBorder={styleOptions?.withoutBottomBorder}
+          withoutTopBorder={styleOptions?.withoutTopBorder}
+          withoutLeftBorder={styleOptions?.withoutLeftBorder}
+          withoutRightBorder={styleOptions?.withoutRightBorder}
+          isDataLoading={isLoading}
+          style={props.style}
+          resizable={apiEndpoint.pathname}
+          withoutBottomRounding={withoutBottomRounding}
+          withoutBottomPadding={withoutBottomPadding}
+        >
+          <Thead
+            backgroundColor={styleOptions?.headerBackgroundColor}
+            style={styleOptions?.thStyle}
+          >
+            {!props.withoutActions && !hideEditableOptions && (
+              <Th
+                className={styleOptions?.thClassName}
+                resizable={`${apiEndpoint.pathname}.leftCheckbox`}
+                withoutVerticalPadding={styleOptions?.withoutThVerticalPadding}
+                textSize={styleOptions?.thTextSize}
+                disableUppercase={styleOptions?.disableThUppercase}
+                onClick={handleAllCheckboxClick}
+              >
+                <DataTableCheckbox
+                  resource={props.resource}
+                  dataLength={currentData.length}
+                />
+              </Th>
+            )}
+
+            {props.columns.map(
+              (column, index) =>
+                Boolean(!excludeColumns.includes(column.id)) && (
+                  <Th
+                    id={column.id}
+                    key={index}
+                    className={styleOptions?.thClassName}
+                    isCurrentlyUsed={sortedBy === (column.sortKey ?? column.id)}
+                    sortKey={column.sortKey}
+                    onColumnClick={(data: ColumnSortPayload) => {
+                      setSortedBy(data.field);
+                      setSort(data.sort);
+                    }}
+                    childrenClassName={styleOptions?.thChildrenClassName}
+                    resizable={`${apiEndpoint.pathname}.${column.id}`}
+                    useOnlyCurrentSortDirectionIcon={
+                      styleOptions?.useOnlyCurrentSortDirectionIcon
+                    }
+                    textSize={styleOptions?.thTextSize}
+                    disableUppercase={styleOptions?.disableThUppercase}
+                    descIcon={styleOptions?.descIcon}
+                    ascIcon={styleOptions?.ascIcon}
+                  >
+                    <div className="flex items-center space-x-3">
+                      {dateRangeColumns.some(
+                        (dateRangeColumn) =>
+                          column.id === dateRangeColumn.column
+                      ) && (
+                        <DateRangePicker
+                          columnId={column.id}
+                          startDate={
+                            getDateRangeEntryForColumn(column.id)?.startDate ??
+                            ''
+                          }
+                          endDate={
+                            getDateRangeEntryForColumn(column.id)?.endDate ?? ''
+                          }
+                          onDateRangeChange={handleDateRangeChange}
+                          onClick={() => handleDateRangeColumnClick(column.id)}
+                        />
+                      )}
+
+                      {filterColumns?.some(
+                        (filterColumn) => column.id === filterColumn.column_id
+                      ) && (
+                        <FilterColumn
+                          selectedValues={filterColumnsValues[column.id] || []}
+                          options={
+                            filterColumns?.find(
+                              (filterColumn) =>
+                                filterColumn.column_id === column.id
+                            )?.options || []
+                          }
+                          onChange={(value) =>
+                            setFilterColumnsValues((current) => ({
+                              ...current,
+                              [column.id]: value,
+                            }))
+                          }
+                        />
+                      )}
+                      <span>{column.label}</span>
+                    </div>
+                  </Th>
+                )
+            )}
+
+            {props.withResourcefulActions && !hideEditableOptions && <Th></Th>}
+          </Thead>
+          <Tbody
+            style={{
+              ...styleOptions?.tBodyStyle,
+              opacity: areRowsRendered || !currentData.length ? 1 : 0.5,
+              pointerEvents:
+                areRowsRendered || !currentData.length ? 'auto' : 'none',
+              cursor:
+                areRowsRendered || !currentData.length ? 'default' : 'progress',
+            }}
+          >
+            {(isLoading || !isEqual(currentData, data?.data?.data)) &&
+              !isError && (
+                <MemoizedTr
+                  className="border-b"
+                  style={{
+                    borderColor: colors.$20,
+                  }}
+                >
+                  <Td colSpan={100}>
+                    <Spinner />
+                  </Td>
+                </MemoizedTr>
+              )}
+
+            {isError && !isLoading && (
+              <MemoizedTr
+                className="border-b"
+                style={{
+                  borderColor: colors.$20,
+                }}
+              >
+                <Td className="text-center" colSpan={100}>
+                  {t('error_refresh_page')}
+                </Td>
+              </MemoizedTr>
+            )}
+
+            {!isLoading &&
+              currentData?.length === 0 &&
+              isEqual(currentData, data?.data?.data) && (
+                <MemoizedTr
+                  className="border-b"
+                  style={{
+                    borderColor: colors.$20,
+                  }}
+                >
+                  <Td className={styleOptions?.tdClassName} colSpan={100}>
+                    <div className="flex items-center justify-center py-10">
+                      <span className="text-sm" style={{ color: colors.$17 }}>
+                        {t('no_records_found')}
+                      </span>
+                    </div>
+                  </Td>
+                </MemoizedTr>
+              )}
+
+            {isEqual(currentData, data?.data?.data) &&
+              currentData.map((resource: any, rowIndex: number) => (
+                <MemoizedTr
+                  key={rowIndex}
+                  className="border-b table-row"
+                  style={{
+                    borderColor: colors.$20,
+                  }}
+                  resource={resource}
+                  memoValue={props.columns}
+                  withoutBackgroundColor
+                >
+                  {!props.withoutActions && !hideEditableOptions && (
+                    <Td
+                      className="cursor-pointer"
+                      onClick={() => handleCheckboxClick(resource.id)}
+                    >
+                      <DataTableCheckbox
+                        resourceId={resource.id}
+                        resource={props.resource}
+                      />
+                    </Td>
+                  )}
+
+                  {props.columns.map(
+                    (column, index) =>
+                      Boolean(!excludeColumns.includes(column.id)) && (
+                        <Td
+                          key={index}
+                          className={classNames(
+                            {
+                              'cursor-pointer': index < 3,
+                              'py-4': hideEditableOptions,
+                            },
+                            styleOptions?.tdClassName
+                          )}
+                          onClick={(event: React.MouseEvent<HTMLTableCellElement>) => {
+                            if (index < 3) {
+                              if (
+                                (event.target as HTMLElement).closest(
+                                  'a, button, input, select, textarea, [role="button"]'
+                                )
+                              ) {
+                                return;
+                              }
+
+                              props.onTableRowClick
+                                ? props.onTableRowClick(resource)
+                                : document.getElementById(resource.id)?.click();
+                            }
+                          }}
+                          withoutPadding={styleOptions?.withoutTdPadding}
+                          resizable={`${apiEndpoint.pathname}.${column.id}`}
+                        >
+                          {column.format
+                            ? column.format(resource[column.id], resource)
+                            : resource[column.id]}
+                        </Td>
+                      )
+                  )}
+
+                  {props.withResourcefulActions && !hideEditableOptions && (
+                    <Td>
+                      <Dropdown label={t('actions')}>
+                        {props.linkToEdit &&
+                          (props.showEdit?.(resource) || !props.showEdit) && (
+                            <DropdownElement
+                              to={route(props.linkToEdit, {
+                                id: resource?.id,
+                              })}
+                              icon={<Icon element={MdEdit} />}
+                            >
+                              {t('edit')}
+                            </DropdownElement>
+                          )}
+
+                        {props.linkToEdit &&
+                          props.customActions &&
+                          showCustomActionDivider(resource) &&
+                          (props.showEdit?.(resource) || !props.showEdit) && (
+                            <Divider withoutPadding />
+                          )}
+
+                        {props.customActions &&
+                          props.customActions.map(
+                            (
+                              action: ResourceAction<typeof resource>,
+                              index: number
+                            ) =>
+                              !bottomActionsKeys.includes(
+                                action(resource)?.key || ''
+                              ) && <div key={index}>{action(resource)}</div>
+                          )}
+
+                        {props.customActions &&
+                          (props.showRestore?.(resource) ||
+                            !props.showRestore) && <Divider withoutPadding />}
+
+                        {resource?.archived_at === 0 &&
+                          (props.showArchive?.(resource) ||
+                            !props.showArchive) && (
+                            <DropdownElement
+                              onClick={() => bulk('archive', resource.id)}
+                              icon={<Icon element={MdArchive} />}
+                            >
+                              {t('archive')}
+                            </DropdownElement>
+                          )}
+
+                        {resource?.archived_at > 0 &&
+                          (props.showRestore?.(resource) ||
+                            !props.showRestore) && (
+                            <DropdownElement
+                              onClick={() => bulk('restore', resource.id)}
+                              icon={<Icon element={MdRestore} />}
+                            >
+                              {t('restore')}
+                            </DropdownElement>
+                          )}
+
+                        {!resource?.is_deleted &&
+                          (props.showDelete?.(resource) ||
+                            !props.showDelete) && (
+                            <DropdownElement
+                              onClick={() => bulk('delete', resource.id)}
+                              icon={<Icon element={MdDelete} />}
+                            >
+                              {t('delete')}
+                            </DropdownElement>
+                          )}
+
+                        {props.customActions &&
+                          props.customActions.map(
+                            (
+                              action: ResourceAction<typeof resource>,
+                              index: number
+                            ) =>
+                              bottomActionsKeys.includes(
+                                action(resource)?.key || ''
+                              ) && <div key={index}>{action(resource)}</div>
+                          )}
+                      </Dropdown>
+                    </Td>
+                  )}
+                </MemoizedTr>
+              ))}
+          </Tbody>
+
+          {Boolean(footerColumns.length) &&
+            Boolean(currentData?.length) &&
+            Boolean(reactSettings.show_table_footer) && (
+              <TFooter>
+                {!props.withoutActions && !hideEditableOptions && <Th></Th>}
+
+                {props.columns.map((column, index) => {
+                  const footerColumn = getFooterColumn(column.column);
+
+                  return (
+                    Boolean(!excludeColumns.includes(column.id)) && (
+                      <Td
+                        key={index}
+                        customizeTextColor
+                        resizable={`${apiEndpoint.pathname}.${column.id}`}
+                      >
+                        {footerColumn ? (
+                          <div className="flex items-center space-x-3">
+                            {footerColumn.format(
+                              getColumnValues(footerColumn.id),
+                              currentData || []
+                            ) ?? '-/-'}
+                          </div>
+                        ) : (
+                          <></>
+                        )}
+                      </Td>
+                    )
+                  );
+                })}
+
+                {props.withResourcefulActions && !hideEditableOptions && (
+                  <Th></Th>
+                )}
+              </TFooter>
+            )}
+        </Table>
+      )}
+
+      {data && !props.withoutPagination && (
+        <Pagination
+          currentPerPage={perPage}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onRowsChange={setPerPage}
+          totalPages={
+            totalPagesPropPath
+              ? get(data, totalPagesPropPath)
+              : data.data.meta.pagination.total_pages
+          }
+          totalRecords={
+            totalRecordsPropPath
+              ? get(data, totalRecordsPropPath)
+              : data.data.meta.pagination.total
+          }
+          pagination={data.data.meta?.pagination}
+        />
+      )}
+    </div>
+  );
+}

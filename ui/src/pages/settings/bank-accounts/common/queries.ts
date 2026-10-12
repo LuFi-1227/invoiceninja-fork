@@ -1,0 +1,97 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useQuery } from '@tanstack/react-query';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useAdmin } from '$app/common/hooks/permissions/useHasPermission';
+import { $refetch } from '$app/common/hooks/useRefetch';
+import { BankAccount } from '$app/common/interfaces/bank-accounts';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import { Params } from '$app/common/queries/common/params.interface';
+
+interface BankAccountParams {
+  id: string | undefined;
+  enabled?: boolean;
+}
+
+export function useBankAccountQuery(params: BankAccountParams) {
+  const { isAdmin, isOwner } = useAdmin();
+
+  return useQuery({
+    queryKey: ['/api/v1/bank_integrations', params.id],
+
+    queryFn: () =>
+      request(
+        'GET',
+        endpoint('/api/v1/bank_integrations/:id', { id: params.id })
+      ).then(
+        (response: GenericSingleResourceResponse<BankAccount>) =>
+          response.data.data
+      ),
+
+    enabled: (params.enabled ?? true) && (isAdmin || isOwner),
+    staleTime: Infinity,
+  });
+}
+
+export function useBankAccountsQuery(params?: Params) {
+  const { perPage } = params || {};
+
+  return useQuery({
+    queryKey: ['/api/v1/bank_integrations', params],
+
+    queryFn: () =>
+      request(
+        'GET',
+        endpoint('/api/v1/bank_integrations?per_page=:perPage&status=active', {
+          perPage: perPage ?? 20,
+        })
+      ).then(
+        (response: GenericSingleResourceResponse<BankAccount[]>) =>
+          response.data.data
+      ),
+
+    staleTime: Infinity,
+  });
+}
+
+export function useBlankBankAccountQuery() {
+  const { isAdmin, isOwner } = useAdmin();
+
+  return useQuery({
+    queryKey: ['/api/v1/bank_integrations', 'create'],
+
+    queryFn: () =>
+      request('GET', endpoint('/api/v1/bank_integrations/create')).then(
+        (response: GenericSingleResourceResponse<BankAccount>) =>
+          response.data.data
+      ),
+
+    staleTime: Infinity,
+    enabled: isAdmin || isOwner,
+  });
+}
+
+export function useBulkAction() {
+  return (id: string, action: 'archive' | 'restore' | 'delete') => {
+    toast.processing();
+
+    request('POST', endpoint('/api/v1/bank_integrations/bulk'), {
+      action,
+      ids: [id],
+    }).then(() => {
+      toast.success(`${action}d_bank_account`);
+
+      $refetch(['bank_integrations']);
+    });
+  };
+}

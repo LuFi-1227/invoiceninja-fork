@@ -1,0 +1,42 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { toast } from '$app/common/helpers/toast/toast';
+import { Element } from '$app/components/cards';
+import { Button } from '$app/components/forms';
+
+export function Backup() {
+  const [t] = useTranslation();
+
+  const handleExportCompany = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    toast.processing();
+
+    request('POST', endpoint('/api/v1/export'), {
+      send_email: true,
+      report_keys: [],
+    }).then((response) => {
+      toast.success(response.data.message);
+    });
+  };
+
+  return (
+    <Element leftSide={t('export_company')} leftSideHelp={t('exported_data')}>
+      <Button behavior="button" onClick={handleExportCompany}>
+        {t('export')}
+      </Button>
+    </Element>
+  );
+}

@@ -10,7 +10,7 @@
                 @if($account && !$account->isPaid())
                     <div>
                         <img src="{{ asset('images/invoiceninja-black-logo-2.png') }}"
-                             class="border-b border-gray-100 h-18 pb-4" alt="Invoice Ninja logo">
+                             class="border-b border-gray-100 h-18 pb-4" alt="Gestoremio logo">
                     </div>
                 @elseif($company)
                     <div>
@@ -20,7 +20,7 @@
                 @else
                     <div>
                         <img src="{{ asset('images/invoiceninja-black-logo-2.png') }}"
-                             class="mx-auto border-b border-gray-100 h-18 pb-4" alt="Invoice Ninja logo">
+                             class="mx-auto border-b border-gray-100 h-18 pb-4" alt="Gestoremio logo">
                     </div>
                 @endif
 

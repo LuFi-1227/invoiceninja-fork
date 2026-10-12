@@ -1,0 +1,754 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import paymentType from '$app/common/constants/payment-type';
+import { date, getEntityState } from '$app/common/helpers';
+import { route } from '$app/common/helpers/route';
+import { useFormatMoney } from '$app/common/hooks/money/useFormatMoney';
+import { useCurrentCompanyDateFormats } from '$app/common/hooks/useCurrentCompanyDateFormats';
+import { Expense } from '$app/common/interfaces/expense';
+import { RecurringExpense } from '$app/common/interfaces/recurring-expense';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { SelectOption } from '$app/components/datatables/Actions';
+import { DropdownElement } from '$app/components/dropdown/DropdownElement';
+import { EntityStatus } from '$app/components/EntityStatus';
+import { Icon } from '$app/components/icons/Icon';
+import { Action } from '$app/components/ResourceActions';
+import { StatusBadge } from '$app/components/StatusBadge';
+import { Tooltip } from '$app/components/Tooltip';
+import { DataTableColumnsExtended } from '$app/pages/invoices/common/hooks/useInvoiceColumns';
+import { recurringExpenseAtom } from '$app/pages/recurring-expenses/common/atoms';
+import { Dispatch, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  MdArchive,
+  MdControlPointDuplicate,
+  MdDelete,
+  MdDesignServices,
+  MdEdit,
+  MdRestore,
+  MdTextSnippet,
+} from 'react-icons/md';
+import { useNavigate } from 'react-router-dom';
+import { expenseAtom } from './atoms';
+import { ExpenseStatus } from './components/ExpenseStatus';
+import { useEntityCustomFields } from '$app/common/hooks/useEntityCustomFields';
+import { useSetAtom } from 'jotai';
+import { useBulk } from '$app/common/queries/expenses';
+import { Divider } from '$app/components/cards/Divider';
+import { EntityState } from '$app/common/enums/entity-state';
+import { useReactSettings } from '$app/common/hooks/useReactSettings';
+import { useInvoiceExpense } from './useInvoiceExpense';
+import { useEntityPageIdentifier } from '$app/common/hooks/useEntityPageIdentifier';
+import { AddToInvoiceAction } from './components/AddToInvoiceAction';
+import { ExpenseCategory } from './components/ExpenseCategory';
+import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
+import { Assigned } from '$app/components/Assigned';
+import { useDisableNavigation } from '$app/common/hooks/useDisableNavigation';
+import { DynamicLink } from '$app/components/DynamicLink';
+import { useFormatCustomFieldValue } from '$app/common/hooks/useFormatCustomFieldValue';
+import {
+  useCalculateExpenseAmount,
+  useCalculateExpenseExclusiveAmount,
+} from './hooks/useCalculateExpenseAmount';
+import { useStatusThemeColorScheme } from '$app/pages/settings/user/components/StatusColorTheme';
+import {
+  extractTextFromHTML,
+  sanitizeHTML,
+} from '$app/common/helpers/html-string';
+import { useFormatNumber } from '$app/common/hooks/useFormatNumber';
+import dayjs from 'dayjs';
+import { useExpenseCategoriesQuery } from '$app/common/queries/expense-categories';
+import {
+  hexToRGB,
+  isColorLight,
+  useAdjustColorDarkness,
+} from '$app/common/hooks/useAdjustColorDarkness';
+import { Link } from '$app/components/forms';
+import classNames from 'classnames';
+import { useChangeTemplate } from '$app/pages/settings/invoice-design/pages/custom-designs/components/ChangeTemplate';
+import { normalizeColumnName } from '$app/common/helpers/data-table';
+import { useDisplayRunTemplateActions } from '$app/common/hooks/useDisplayRunTemplateActions';
+import { Frequency } from '$app/common/enums/frequency';
+import { TagPills } from '$app/components/tags/TagPills';
+
+interface ActionsParams {
+  showEditAction?: boolean;
+  showCommonBulkAction?: boolean;
+}
+
+export function useActions(params?: ActionsParams) {
+  const [t] = useTranslation();
+
+  const { showEditAction, showCommonBulkAction } = params || {};
+
+  const hasPermission = useHasPermission();
+
+  const bulk = useBulk();
+  const navigate = useNavigate();
+
+  const { shouldBeVisible: shouldBeRunTemplateActionVisible } =
+    useDisplayRunTemplateActions();
+
+  const setExpense = useSetAtom(expenseAtom);
+  const setRecurringExpense = useSetAtom(recurringExpenseAtom);
+
+  const { isEditPage } = useEntityPageIdentifier({
+    entity: 'expense',
+    editPageTabs: ['documents'],
+  });
+
+  const { create } = useInvoiceExpense();
+
+  const cloneToExpense = (expense: Expense) => {
+    setExpense({
+      ...expense,
+      id: '',
+      documents: [],
+      number: '',
+      invoice_id: '',
+      date: dayjs().format('YYYY-MM-DD'),
+    });
+
+    navigate('/expenses/create?action=clone');
+  };
+
+  const cloneToRecurringExpense = (expense: Expense) => {
+    setRecurringExpense({
+      ...(expense as RecurringExpense),
+      id: '',
+      documents: [],
+      number: '',
+      date: dayjs().format('YYYY-MM-DD'),
+      frequency_id: Frequency.Monthly,
+    });
+
+    navigate('/recurring_expenses/create?action=clone');
+  };
+
+  const {
+    setChangeTemplateVisible,
+    setChangeTemplateResources,
+    setChangeTemplateEntityContext,
+  } = useChangeTemplate();
+
+  const actions: Action<Expense>[] = [
+    (expense) =>
+      Boolean(showEditAction) && (
+        <DropdownElement
+          to={route('/expenses/:id/edit', { id: expense.id })}
+          icon={<Icon element={MdEdit} />}
+        >
+          {t('edit')}
+        </DropdownElement>
+      ),
+    () => Boolean(showEditAction) && <Divider withoutPadding />,
+    (expense) =>
+      expense.should_be_invoiced === true &&
+      expense.invoice_id.length === 0 &&
+      hasPermission('create_invoice') && (
+        <DropdownElement
+          onClick={() => create([expense])}
+          icon={<Icon element={MdTextSnippet} />}
+        >
+          {t('invoice_expense')}
+        </DropdownElement>
+      ),
+    (expense) =>
+      expense.should_be_invoiced === true &&
+      expense.invoice_id.length === 0 && (
+        <AddToInvoiceAction expenses={[expense]} />
+      ),
+    (expense) =>
+      hasPermission('create_expense') && (
+        <DropdownElement
+          onClick={() => cloneToExpense(expense)}
+          icon={<Icon element={MdControlPointDuplicate} />}
+        >
+          {t('clone')}
+        </DropdownElement>
+      ),
+    (expense) =>
+      hasPermission('create_recurring_expense') && (
+        <DropdownElement
+          onClick={() => cloneToRecurringExpense(expense)}
+          icon={<Icon element={MdControlPointDuplicate} />}
+        >
+          {t('clone_to_recurring')}
+        </DropdownElement>
+      ),
+    (expense) =>
+      shouldBeRunTemplateActionVisible && (
+        <DropdownElement
+          onClick={() => {
+            setChangeTemplateVisible(true);
+            setChangeTemplateResources([expense]);
+            setChangeTemplateEntityContext({
+              endpoint: '/api/v1/expenses/bulk',
+              entity: 'expense',
+            });
+          }}
+          icon={<Icon element={MdDesignServices} />}
+        >
+          {t('run_template')}
+        </DropdownElement>
+      ),
+    () =>
+      (isEditPage || Boolean(showCommonBulkAction)) && (
+        <Divider withoutPadding />
+      ),
+    (expense) =>
+      getEntityState(expense) === EntityState.Active &&
+      (isEditPage || Boolean(showCommonBulkAction)) && (
+        <DropdownElement
+          onClick={() => bulk([expense.id], 'archive')}
+          icon={<Icon element={MdArchive} />}
+        >
+          {t('archive')}
+        </DropdownElement>
+      ),
+    (expense) =>
+      (getEntityState(expense) === EntityState.Archived ||
+        getEntityState(expense) === EntityState.Deleted) &&
+      (isEditPage || Boolean(showCommonBulkAction)) && (
+        <DropdownElement
+          onClick={() => bulk([expense.id], 'restore')}
+          icon={<Icon element={MdRestore} />}
+        >
+          {t('restore')}
+        </DropdownElement>
+      ),
+    (expense) =>
+      (getEntityState(expense) === EntityState.Active ||
+        getEntityState(expense) === EntityState.Archived) &&
+      (isEditPage || Boolean(showCommonBulkAction)) && (
+        <DropdownElement
+          onClick={() => bulk([expense.id], 'delete')}
+          icon={<Icon element={MdDelete} />}
+        >
+          {t('delete')}
+        </DropdownElement>
+      ),
+  ];
+
+  return actions;
+}
+
+export const defaultColumns: string[] = [
+  'status',
+  'number',
+  'client',
+  'vendor',
+  'date',
+  'amount',
+  'public_notes',
+];
+
+export function useAllExpenseColumns() {
+  const [firstCustom, secondCustom, thirdCustom, fourthCustom] =
+    useEntityCustomFields({
+      entity: 'expense',
+    });
+
+  const expenseColumns = [
+    'status',
+    'number',
+    'vendor',
+    'client',
+    'date',
+    'amount',
+    'public_notes',
+    'entity_state',
+    'archived_at',
+    //   'assigned_to', @Todo: Need to resolve relationship
+    'category',
+    'created_at',
+    //'created_by', @Todo: Need to resolve relationship
+    firstCustom,
+    secondCustom,
+    thirdCustom,
+    fourthCustom,
+    'documents',
+    'exchange_rate',
+    'is_deleted',
+    'net_amount', // @Todo: `net_amount` vs `amount`?
+    'payment_date',
+    'payment_type',
+    'private_notes',
+    'project',
+    //   'recurring_expense', @Todo: Need to resolve relationship
+    'should_be_invoiced',
+    //   'tax_amount', @Todo: Need to calc
+    'tax_name1',
+    'tax_name2',
+    'tax_name3',
+    'tax_rate1',
+    'tax_rate2',
+    'tax_rate3',
+    'transaction',
+    'transaction_reference',
+    'updated_at',
+    'tags',
+  ] as const;
+
+  return expenseColumns.map((column) => normalizeColumnName(column));
+}
+
+export function useExpenseColumns() {
+  const { t } = useTranslation();
+  const { dateFormat } = useCurrentCompanyDateFormats();
+
+  const formatNumber = useFormatNumber();
+  const hasPermission = useHasPermission();
+  const disableNavigation = useDisableNavigation();
+
+  const navigate = useNavigate();
+  const formatMoney = useFormatMoney();
+  const reactSettings = useReactSettings();
+  const formatCustomFieldValue = useFormatCustomFieldValue();
+  const calculateExpenseAmount = useCalculateExpenseAmount();
+  const calculateExpenseExclusiveAmount = useCalculateExpenseExclusiveAmount();
+  const expenseColumns = useAllExpenseColumns();
+  type ExpenseColumns = (typeof expenseColumns)[number];
+
+  const [firstCustom, secondCustom, thirdCustom, fourthCustom] =
+    useEntityCustomFields({
+      entity: 'expense',
+    });
+
+  const columns: DataTableColumnsExtended<Expense, ExpenseColumns> = [
+    {
+      column: 'category',
+      id: 'category_id',
+      label: t('category'),
+      format: (_, expense) => expense && <ExpenseCategory expense={expense} />,
+    },
+    {
+      column: 'status',
+      id: 'id',
+      label: t('status'),
+      format: (value, expense) => (
+        <div className="flex items-center space-x-2">
+          <DynamicLink
+            to={route('/expenses/:id/edit', { id: expense.id })}
+            renderSpan={disableNavigation('expense', expense)}
+          >
+            <span className="inline-flex items-center space-x-4">
+              <ExpenseStatus entity={expense} />
+            </span>
+          </DynamicLink>
+
+          {expense.invoice_id && (
+            <Assigned
+              entityId={expense.invoice_id}
+              cacheEndpoint="/api/v1/invoices"
+              apiEndpoint="/api/v1/invoices/:id?include=client.group_settings"
+              preCheck={
+                hasPermission('view_invoice') || hasPermission('edit_invoice')
+              }
+              component={
+                <Icon
+                  element={MdTextSnippet}
+                  size={19}
+                  onClick={() =>
+                    navigate(
+                      route('/invoices/:id/edit', { id: expense.invoice_id })
+                    )
+                  }
+                />
+              }
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      column: 'number',
+      id: 'number',
+      label: t('number'),
+      format: (field, expense) => (
+        <DynamicLink
+          to={route('/expenses/:id/edit', { id: expense.id })}
+          renderSpan={disableNavigation('expense', expense)}
+        >
+          {field}
+        </DynamicLink>
+      ),
+    },
+    {
+      column: 'vendor',
+      id: 'vendor_id',
+      label: t('vendor'),
+      format: (value, expense) =>
+        expense.vendor && (
+          <DynamicLink
+            to={route('/vendors/:id', { id: value.toString() })}
+            renderSpan={disableNavigation('vendor', expense.vendor)}
+          >
+            {expense.vendor.name}
+          </DynamicLink>
+        ),
+    },
+    {
+      column: 'client',
+      id: 'client_id',
+      label: t('client'),
+      format: (value, expense) =>
+        expense.client && (
+          <DynamicLink
+            to={route('/clients/:id', { id: value.toString() })}
+            renderSpan={disableNavigation('client', expense.client)}
+          >
+            {expense.client.display_name}
+          </DynamicLink>
+        ),
+    },
+    {
+      column: 'date',
+      id: 'date',
+      label: t('date'),
+      format: (value) => date(value, dateFormat),
+    },
+    {
+      column: 'amount',
+      id: 'amount',
+      label: t('amount'),
+      format: (_, expense) =>
+        formatMoney(
+          calculateExpenseAmount(expense),
+          expense.client?.country_id,
+          expense.currency_id || expense.client?.settings.currency_id
+        ),
+    },
+    {
+      column: 'public_notes',
+      id: 'public_notes',
+      label: t('public_notes'),
+      format: (value) => (
+        <Tooltip
+          width="auto"
+          tooltipElement={
+            <div className="w-full max-h-48 overflow-auto whitespace-normal break-all">
+              <article
+                className={classNames('prose prose-sm', {
+                  'prose-invert': !reactSettings?.dark_mode,
+                })}
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHTML(value as string),
+                }}
+              />
+            </div>
+          }
+        >
+          <span>
+            {extractTextFromHTML(sanitizeHTML(value as string)).slice(0, 50)}
+          </span>
+        </Tooltip>
+      ),
+    },
+    {
+      column: 'entity_state',
+      id: 'id',
+      label: t('entity_state'),
+      format: (value, resource) => <EntityStatus entity={resource} />,
+    },
+    {
+      column: 'archived_at',
+      id: 'archived_at',
+      label: t('archived_at'),
+      format: (value) => date(value, dateFormat),
+    },
+    {
+      column: 'created_at',
+      id: 'created_at',
+      label: t('created_at'),
+      format: (value) => date(value, dateFormat),
+    },
+    {
+      column: firstCustom,
+      id: 'custom_value1',
+      label: firstCustom,
+      format: (value) => formatCustomFieldValue('expense1', value?.toString()),
+    },
+    {
+      column: secondCustom,
+      id: 'custom_value2',
+      label: secondCustom,
+      format: (value) => formatCustomFieldValue('expense2', value?.toString()),
+    },
+    {
+      column: thirdCustom,
+      id: 'custom_value3',
+      label: thirdCustom,
+      format: (value) => formatCustomFieldValue('expense3', value?.toString()),
+    },
+    {
+      column: fourthCustom,
+      id: 'custom_value4',
+      label: fourthCustom,
+      format: (value) => formatCustomFieldValue('expense4', value?.toString()),
+    },
+    {
+      column: 'documents',
+      id: 'documents',
+      label: t('documents'),
+      format: (value, expense) => expense.documents.length,
+    },
+    {
+      column: 'exchange_rate',
+      id: 'exchange_rate',
+      label: t('exchange_rate'),
+      format: (value) => formatNumber(value),
+    },
+    {
+      column: 'is_deleted',
+      id: 'is_deleted',
+      label: t('is_deleted'),
+      format: (value, expense) => (expense.is_deleted ? t('yes') : t('no')),
+    },
+    {
+      column: 'net_amount',
+      id: 'amount',
+      label: t('net_amount'),
+      format: (value, expense) =>
+        formatMoney(
+          calculateExpenseExclusiveAmount(expense),
+          expense.client?.country_id,
+          expense.currency_id || expense.client?.settings.currency_id
+        ),
+    },
+    {
+      column: 'payment_date',
+      id: 'payment_date',
+      label: t('payment_date'),
+      format: (value) => date(value, dateFormat),
+    },
+    {
+      column: 'payment_type',
+      id: 'payment_type_id',
+      label: t('payment_type'),
+      format: (value) => (
+        <StatusBadge for={paymentType} code={value} headless />
+      ),
+    },
+    {
+      column: 'private_notes',
+      id: 'private_notes',
+      label: t('private_notes'),
+      format: (value) => (
+        <Tooltip
+          width="auto"
+          tooltipElement={
+            <div className="w-full max-h-48 overflow-auto whitespace-normal break-all">
+              <article
+                className={classNames('prose prose-sm', {
+                  'prose-invert': !reactSettings?.dark_mode,
+                })}
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHTML(value as string),
+                }}
+              />
+            </div>
+          }
+        >
+          <span>
+            {extractTextFromHTML(sanitizeHTML(value as string)).slice(0, 50)}
+          </span>
+        </Tooltip>
+      ),
+    },
+    {
+      column: 'should_be_invoiced',
+      id: 'should_be_invoiced',
+      label: t('should_be_invoiced'),
+      format: (value, expense) =>
+        expense.should_be_invoiced ? t('yes') : t('no'),
+    },
+    {
+      column: 'tax_name1',
+      id: 'tax_name1',
+      label: t('tax_name1'),
+    },
+    {
+      column: 'tax_name2',
+      id: 'tax_name2',
+      label: t('tax_name2'),
+    },
+    {
+      column: 'tax_name3',
+      id: 'tax_name3',
+      label: t('tax_name3'),
+    },
+    {
+      column: 'tax_rate1',
+      id: 'tax_rate1',
+      label: t('tax_rate1'),
+      format: (value) => formatNumber(value),
+    },
+    {
+      column: 'tax_rate2',
+      id: 'tax_rate2',
+      label: t('tax_rate2'),
+      format: (value) => formatNumber(value),
+    },
+    {
+      column: 'tax_rate3',
+      id: 'tax_rate3',
+      label: t('tax_rate3'),
+      format: (value) => formatNumber(value),
+    },
+    {
+      column: 'transaction',
+      id: 'transaction_id',
+      label: t('transaction'),
+      format: (value, expense) =>
+        expense.transaction_id && (
+          <DynamicLink
+            to={route('/transactions/:id/edit', { id: value.toString() })}
+            renderSpan={disableNavigation('bank_transaction', null)}
+          >
+            {t('view')}
+          </DynamicLink>
+        ),
+    },
+    {
+      column: 'transaction_reference',
+      id: 'transaction_reference',
+      label: t('transaction_reference'),
+    },
+    {
+      column: 'updated_at',
+      id: 'updated_at',
+      label: t('updated_at'),
+      format: (value) => date(value, dateFormat),
+    },
+    {
+      column: 'project',
+      id: 'project',
+      label: t('project'),
+      format: (_, expense) => (
+        <Link to={route('/projects/:id', { id: expense?.project?.id })}>
+          {expense?.project?.name}
+        </Link>
+      ),
+    },
+    {
+      column: 'tags',
+      id: 'expense_tag_ids',
+      label: t('tags'),
+      format: (value, expense) => <TagPills tags={expense.tags} />,
+    },
+  ];
+
+  const list: string[] =
+    reactSettings?.react_table_columns?.expense || defaultColumns;
+
+  return columns
+    .filter((column) => list.includes(normalizeColumnName(column.column)))
+    .sort(
+      (a, b) =>
+        list.indexOf(normalizeColumnName(a.column)) -
+        list.indexOf(normalizeColumnName(b.column))
+    );
+}
+
+interface HandleChangeExpenseParams {
+  setExpense: Dispatch<SetStateAction<Expense | undefined>>;
+  setErrors: Dispatch<SetStateAction<ValidationBag | undefined>>;
+}
+
+export function useHandleChange(params: HandleChangeExpenseParams) {
+  const { setExpense, setErrors } = params;
+
+  return <T extends keyof Expense>(
+    property: T,
+    value: Expense[typeof property]
+  ) => {
+    setErrors(undefined);
+
+    setExpense((expense) => expense && { ...expense, [property]: value });
+  };
+}
+
+export function useExpenseFilters() {
+  const [t] = useTranslation();
+
+  const statusThemeColors = useStatusThemeColorScheme();
+
+  const adjustColorDarkness = useAdjustColorDarkness();
+
+  const { data: expenseCategoriesResponse } = useExpenseCategoriesQuery({
+    status: ['active'],
+    perPage: 500,
+  });
+
+  const filters: SelectOption[] = [
+    {
+      label: t('logged'),
+      value: 'logged',
+      color: 'white',
+      backgroundColor: '#6B7280',
+      dropdownKey: '0',
+    },
+    {
+      label: t('pending'),
+      value: 'pending',
+      color: 'white',
+      backgroundColor: '#93C5FD',
+      dropdownKey: '0',
+    },
+    {
+      label: t('invoiced'),
+      value: 'invoiced',
+      color: 'white',
+      backgroundColor: statusThemeColors.$3 || '#1D4ED8',
+      dropdownKey: '0',
+    },
+    {
+      label: t('paid'),
+      value: 'paid',
+      color: 'white',
+      backgroundColor: statusThemeColors.$1 || '#22C55E',
+      dropdownKey: '0',
+    },
+    {
+      label: t('unpaid'),
+      value: 'unpaid',
+      color: 'white',
+      backgroundColor: statusThemeColors.$4 || '#e6b05c',
+      dropdownKey: '0',
+    },
+    {
+      label: t('uncategorized'),
+      value: 'uncategorized',
+      color: 'white',
+      backgroundColor: '#b5812c',
+      dropdownKey: '0',
+    },
+  ];
+
+  expenseCategoriesResponse?.forEach((expenseCategory) => {
+    const { red, green, blue, hex } = hexToRGB(expenseCategory.color || '');
+
+    const darknessAmount = isColorLight(red, green, blue) ? -220 : 220;
+
+    filters.push({
+      value: expenseCategory.id,
+      label: expenseCategory.name,
+      color: adjustColorDarkness(hex, darknessAmount),
+      backgroundColor: expenseCategory.color || '',
+      queryKey: 'categories',
+      dropdownKey: '1',
+      placeHolder: 'expense_categories',
+    });
+  });
+
+  return filters;
+}

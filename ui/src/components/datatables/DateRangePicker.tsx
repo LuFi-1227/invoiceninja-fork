@@ -1,0 +1,148 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import Tippy from '@tippyjs/react/headless';
+import { ConfigProvider, DatePicker } from 'antd';
+import dayjs from 'dayjs';
+import { useAtomValue } from 'jotai';
+import { useEffect, useRef, useState } from 'react';
+import { Calendar } from 'react-feather';
+import { useClickAway } from 'react-use';
+import { emitter } from '$app';
+import { useColorScheme } from '$app/common/colors';
+import {
+  type DayjsRange,
+  serializeDateRange,
+} from '$app/common/helpers/dateRange';
+import { useCurrentCompanyDateFormats } from '$app/common/hooks/useCurrentCompanyDateFormats';
+import { antdLocaleAtom } from '../DropdownDateRangePicker';
+import { Icon } from '../icons/Icon';
+
+interface Props {
+  columnId: string;
+  startDate: string;
+  endDate: string;
+  onDateRangeChange: (
+    columnId: string,
+    startDate: string,
+    endDate: string
+  ) => void;
+  onClick: () => void;
+}
+
+export function DateRangePicker({
+  columnId,
+  startDate,
+  endDate,
+  onDateRangeChange,
+  onClick,
+}: Props) {
+  const divRef = useRef(null);
+
+  const { RangePicker } = DatePicker;
+
+  const colors = useColorScheme();
+
+  const [isVisible, setIsVisible] = useState<boolean>(false);
+  const [isCalendarVisible, setIsCalendarVisible] = useState<boolean>(false);
+
+  const [internalStartDate, setInternalStartDate] = useState<string>(startDate);
+  const [internalEndDate, setInternalEndDate] = useState<string>(endDate);
+
+  const antdLocale = useAtomValue(antdLocaleAtom);
+  const { dateFormat } = useCurrentCompanyDateFormats();
+
+  useEffect(() => {
+    setInternalStartDate(startDate);
+    setInternalEndDate(endDate);
+  }, [startDate, endDate]);
+
+  useClickAway(divRef, () => {
+    isVisible && !isCalendarVisible && setIsVisible(false);
+  });
+
+  const handleChangeValue = (value: DayjsRange) => {
+    const [start, end] = serializeDateRange(value);
+
+    setInternalStartDate(start);
+    setInternalEndDate(end);
+
+    if ((start.length && end.length) || (!start.length && !end.length)) {
+      onDateRangeChange(columnId, start, end);
+    }
+  };
+
+  const isCurrentDateRangeActive = () => {
+    return Boolean(
+      startDate && startDate.length > 0 && endDate && endDate.length > 0
+    );
+  };
+
+  useEffect(() => {
+    emitter.on('date_range_picker.clear', () => {
+      setInternalStartDate('');
+      setInternalEndDate('');
+    });
+  }, []);
+
+  return (
+    <div ref={divRef}>
+      <Tippy
+        visible={isVisible}
+        placement="bottom"
+        interactive={true}
+        popperOptions={{ strategy: 'fixed' }}
+        render={() => (
+          <div
+            className="flex flex-col p-3"
+            style={{
+              backgroundColor: colors.$2,
+              border: `1px solid ${colors.$5}`,
+              width: 300,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ConfigProvider locale={antdLocale ?? undefined}>
+              <RangePicker
+                size="large"
+                value={[
+                  internalStartDate.length > 0
+                    ? dayjs(internalStartDate)
+                    : null,
+                  internalEndDate.length > 0 ? dayjs(internalEndDate) : null,
+                ]}
+                format={dateFormat}
+                onCalendarChange={handleChangeValue}
+                onOpenChange={(value) => setIsCalendarVisible(value)}
+              />
+            </ConfigProvider>
+          </div>
+        )}
+      >
+        <div
+          className="cursor-pointer"
+          onClick={(event) => {
+            event.stopPropagation();
+
+            onClick();
+
+            setIsVisible((current) => !current);
+          }}
+        >
+          <Icon
+            element={Calendar}
+            color={isCurrentDateRangeActive() ? '#22c55e' : colors.$17}
+            style={{ width: '1.4rem', height: '1.4rem' }}
+          />
+        </div>
+      </Tippy>
+    </div>
+  );
+}

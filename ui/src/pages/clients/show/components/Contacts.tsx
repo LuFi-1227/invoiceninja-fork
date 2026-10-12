@@ -1,0 +1,189 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '$app/common/colors';
+import { route } from '$app/common/helpers/route';
+import { useFormatCustomFieldValue } from '$app/common/hooks/useFormatCustomFieldValue';
+import { Client } from '$app/common/interfaces/client';
+import { ClientContact } from '$app/common/interfaces/client-contact';
+import { CopyToClipboardIconOnly } from '$app/components/CopyToClipBoardIconOnly';
+import { CustomFields, useCustomField } from '$app/components/CustomField';
+import { Link } from '$app/components/forms';
+import { InfoCard } from '$app/components/InfoCard';
+import { Tooltip } from '$app/components/Tooltip';
+import { UserUnsubscribedTooltip } from '../../common/components/UserUnsubscribedTooltip';
+
+interface Props {
+  client: Client;
+}
+
+const contactCustomFieldKeys: CustomFields[] = [
+  'contact1',
+  'contact2',
+  'contact3',
+  'contact4',
+];
+
+export function Contacts(props: Props) {
+  const [t] = useTranslation();
+
+  const colors = useColorScheme();
+
+  const { client } = props;
+
+  const customField = useCustomField();
+  const formatCustomFieldValue = useFormatCustomFieldValue();
+
+  const hasAnyContactCustomField = (contact: ClientContact) => {
+    return contactCustomFieldKeys.some((field) => {
+      const label = customField(field).label();
+      const value =
+        contact[`custom_value${field.slice(-1)}` as keyof ClientContact];
+
+      return Boolean(label && value);
+    });
+  };
+
+  return (
+    <>
+      {client && (
+        <InfoCard
+          title={t('contacts')}
+          className="col-span-12 lg:col-span-6 xl:col-span-4 2xl:col-span-3 shadow-sm h-full 2xl:h-max p-4"
+          style={{ borderColor: colors.$24 }}
+          withoutPadding
+        >
+          <div className="flex flex-col h-44 w-full overflow-y-auto">
+            {client.contacts.map(
+              (contact: ClientContact, index: number) =>
+                Boolean(
+                  contact.first_name ||
+                    contact.last_name ||
+                    contact.phone ||
+                    contact.email ||
+                    hasAnyContactCustomField(contact)
+                ) && (
+                  <div
+                    key={index}
+                    className="flex justify-between items-center first:pt-1 py-4 border-b border-dashed"
+                    style={{ borderColor: colors.$21 }}
+                  >
+                    <div className="flex flex-col space-y-1 text-sm">
+                      {Boolean(contact.first_name || contact.last_name) && (
+                        <span
+                          className="font-medium"
+                          style={{ color: colors.$3 }}
+                        >
+                          {contact.first_name} {contact.last_name}
+                        </span>
+                      )}
+
+                      {Boolean(contact.phone) && (
+                        <span
+                          className="font-medium"
+                          style={{ color: colors.$22 }}
+                        >
+                          {contact.phone}
+                        </span>
+                      )}
+
+                      {Boolean(contact.email) && (
+                        <div className="flex space-x-2">
+                          <span
+                            className="font-medium"
+                            style={{ color: colors.$22 }}
+                          >
+                            {contact.email}
+                          </span>
+
+                          <Tooltip
+                            message={t('copy') as string}
+                            placement="top"
+                            width="auto"
+                            centerVertically
+                          >
+                            <CopyToClipboardIconOnly text={contact.email} />
+                          </Tooltip>
+                        </div>
+                      )}
+
+                      {contactCustomFieldKeys.map((field) => {
+                        const label = customField(field).label();
+                        const value =
+                          contact[
+                            `custom_value${field.slice(
+                              -1
+                            )}` as keyof ClientContact
+                          ];
+
+                        if (!label || !value) {
+                          return null;
+                        }
+
+                        return (
+                          <div key={field} className="flex space-x-1">
+                            <span
+                              className="font-medium"
+                              style={{ color: colors.$22 }}
+                            >
+                              {label}:
+                            </span>
+
+                            <span
+                              className="font-medium"
+                              style={{ color: colors.$3 }}
+                            >
+                              {formatCustomFieldValue(field, value as string)}
+                            </span>
+                          </div>
+                        );
+                      })}
+
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          className="cursor-pointer"
+                          to={route(
+                            `${client.contacts[index]?.link}?silent=true&client_hash=:clientHash`,
+                            {
+                              clientHash: client.client_hash,
+                            }
+                          )}
+                          external
+                          withoutExternalIcon
+                        >
+                          {t('client_portal')}
+                        </Link>
+
+                        <Tooltip
+                          message={t('copy_link') as string}
+                          placement="top"
+                          width="auto"
+                          centerVertically
+                        >
+                          <CopyToClipboardIconOnly
+                            text={route(
+                              `${client.contacts[index]?.link}?silent=true`
+                            )}
+                          />
+                        </Tooltip>
+                      </div>
+                    </div>
+
+                    {contact.is_locked && <UserUnsubscribedTooltip />}
+                  </div>
+                )
+            )}
+          </div>
+        </InfoCard>
+      )}
+    </>
+  );
+}

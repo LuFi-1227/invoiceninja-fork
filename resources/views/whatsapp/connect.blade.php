@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Pareamento do WhatsApp — {{ $company->present()->name() ?? config('app.name', 'Invoice Ninja') }}</title>
+    <title>Pareamento do WhatsApp — {{ $company->present()->name() ?? config('app.name', 'Gestoremio') }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,7 +31,7 @@
                 </div>
                 <div>
                     <h1 class="text-lg font-bold text-slate-900 leading-tight">Conexão WhatsApp</h1>
-                    <p class="text-xs text-slate-500">{{ $company->present()->name() ?? $company->name ?? 'Invoice Ninja' }}</p>
+                    <p class="text-xs text-slate-500">{{ $company->present()->name() ?? $company->name ?? config('app.name', 'Gestoremio') }}</p>
                 </div>
             </div>
 
@@ -195,7 +195,7 @@
 
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
-        <p>Invoice Ninja &copy; {{ date('Y') }} &bull; Integração WhatsApp &bull; Criptografia AES-256 ativa</p>
+        <p>{{ config('app.name', 'Gestoremio') }} &copy; {{ date('Y') }} &bull; Integração WhatsApp &bull; Criptografia AES-256 ativa</p>
     </footer>
 
     <!-- Interactive Script -->

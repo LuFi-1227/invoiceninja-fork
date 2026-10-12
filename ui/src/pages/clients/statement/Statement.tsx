@@ -1,0 +1,375 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import dayjs from 'dayjs';
+import quarter from 'dayjs/plugin/quarterOfYear';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MdDownload, MdSchedule, MdSend } from 'react-icons/md';
+import { useParams } from 'react-router-dom';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { route } from '$app/common/helpers/route';
+import { toast } from '$app/common/helpers/toast/toast';
+import {
+  useAdmin,
+  useHasPermission,
+} from '$app/common/hooks/permissions/useHasPermission';
+import { useEntityAssigned } from '$app/common/hooks/useEntityAssigned';
+import { useTitle } from '$app/common/hooks/useTitle';
+import { Client } from '$app/common/interfaces/client';
+import { useClientQuery } from '$app/common/queries/clients';
+import { Page } from '$app/components/Breadcrumbs';
+import { Card, Element } from '$app/components/cards';
+import { Dropdown } from '$app/components/dropdown/Dropdown';
+import { DropdownElement } from '$app/components/dropdown/DropdownElement';
+import { InputField, SelectField } from '$app/components/forms';
+import Toggle from '$app/components/forms/Toggle';
+import { Icon } from '$app/components/icons/Icon';
+import { Default } from '$app/components/layouts/Default';
+import { Spinner } from '$app/components/Spinner';
+import { useScheduleStatement } from '../common/hooks/useScheduleStatement';
+
+dayjs.extend(quarter);
+
+type StatementStatus = 'all' | 'paid' | 'unpaid';
+
+export interface Statement {
+  client_id: string;
+  end_date: string;
+  show_aging_table: boolean;
+  show_payments_table: boolean;
+  show_credits_table: boolean;
+
+  only_clients_with_invoices: boolean;
+  start_date: string;
+  status: StatementStatus;
+  dateRangeId: string;
+}
+
+export default function Statement() {
+  const { documentTitle } = useTitle('statement');
+  const { t } = useTranslation();
+  const { id } = useParams();
+
+  const { isAdmin, isOwner } = useAdmin();
+
+  const hasPermission = useHasPermission();
+  const entityAssigned = useEntityAssigned();
+
+  const { data: clientResponse } = useClientQuery({ id, enabled: true });
+
+  const scheduleStatement = useScheduleStatement();
+
+  const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(false);
+
+  const pages: Page[] = [
+    { name: t('clients'), href: '/clients' },
+    { name: t('client'), href: route('/clients/:id', { id }) },
+    { name: t('statement'), href: route('/clients/:id/statement', { id }) },
+  ];
+
+  const dates = [
+    {
+      id: 'last7_days',
+      start: dayjs().subtract(7, 'days').format('YYYY-MM-DD'),
+      end: dayjs().format('YYYY-MM-DD'),
+    },
+    {
+      id: 'last30_days',
+      start: dayjs().subtract(1, 'month').format('YYYY-MM-DD'),
+      end: dayjs().format('YYYY-MM-DD'),
+    },
+    {
+      id: 'last365_days',
+      start: dayjs().subtract(365, 'days').format('YYYY-MM-DD'),
+      end: dayjs().format('YYYY-MM-DD'),
+    },
+    {
+      id: 'this_month',
+      start: dayjs().startOf('month').format('YYYY-MM-DD'),
+      end: dayjs().format('YYYY-MM-DD'),
+    },
+    {
+      id: 'last_month',
+      start: dayjs().startOf('month').subtract(1, 'month').format('YYYY-MM-DD'),
+      end: dayjs().subtract(1, 'month').endOf('month').format('YYYY-MM-DD'),
+    },
+    {
+      id: 'this_quarter',
+      start: dayjs().startOf('quarter').format('YYYY-MM-DD'),
+      end: dayjs().endOf('quarter').format('YYYY-MM-DD'),
+    },
+    {
+      id: 'last_quarter',
+      start: dayjs()
+        .subtract(1, 'quarter')
+        .startOf('quarter')
+        .format('YYYY-MM-DD'),
+      end: dayjs().subtract(1, 'quarter').endOf('quarter').format('YYYY-MM-DD'),
+    },
+    {
+      id: 'this_year',
+      start: dayjs().startOf('year').format('YYYY-MM-DD'),
+      end: dayjs().format('YYYY-MM-DD'),
+    },
+    {
+      id: 'last_year',
+      start: dayjs().subtract(1, 'year').startOf('year').format('YYYY-MM-DD'),
+      end: dayjs().subtract(1, 'year').endOf('year').format('YYYY-MM-DD'),
+    },
+    {
+      id: 'custom',
+      start: dayjs().subtract(7, 'days').format('YYYY-MM-DD'),
+      end: dayjs().format('YYYY-MM-DD'),
+    },
+  ];
+
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [selectRange, setSelectRange] = useState<string>('last7_days');
+
+  const [client, setClient] = useState<Client>();
+
+  const [statement, setStatement] = useState<Statement>({
+    client_id: id!,
+    start_date: dayjs().subtract(7, 'days').format('YYYY-MM-DD'),
+    end_date: dayjs().format('YYYY-MM-DD'),
+    show_aging_table: true,
+    show_payments_table: true,
+    show_credits_table: true,
+    only_clients_with_invoices: false,
+    status: 'all',
+    dateRangeId: 'last7_days',
+  });
+
+  const handleSelectRangeChange = (id: string) => {
+    const date = dates.find((date) => date.id === id);
+
+    if (date) {
+      setSelectRange(id);
+      setStatement((current) => ({
+        ...current,
+        start_date: date.start,
+        end_date: date.end,
+        dateRangeId: id,
+      }));
+    }
+  };
+
+  const downloadPdf = () => {
+    if (!iframeRef.current) {
+      return;
+    }
+
+    toast.processing();
+
+    const link = document.createElement('a');
+
+    link.download = 'statement.pdf';
+    link.href = iframeRef.current.src;
+    link.target = '_blank';
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    document.body.removeChild(link);
+
+    toast.dismiss();
+  };
+
+  const handleSendEmail = () => {
+    const send = client?.contacts?.some((contact) => contact.email);
+
+    if (!send) {
+      return toast.error('client_email_not_set');
+    }
+
+    toast.processing();
+
+    request(
+      'POST',
+      endpoint('/api/v1/client_statement?send_email=true'),
+      statement
+    ).then((response) => {
+      toast.success(response.data.message);
+    });
+  };
+
+  useEffect(() => {
+    if (clientResponse) {
+      setClient(clientResponse);
+    }
+  }, [clientResponse]);
+
+  useEffect(() => {
+    setIsLoadingPdf(true);
+
+    request('POST', endpoint('/api/v1/client_statement'), statement, {
+      responseType: 'arraybuffer',
+    })
+      .then((response) => {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        if (iframeRef.current) {
+          iframeRef.current.src = url;
+        }
+      })
+      .finally(() => setIsLoadingPdf(false));
+  }, [statement]);
+
+  return (
+    <Default
+      title={documentTitle}
+      breadcrumbs={pages}
+      navigationTopRight={
+        <Dropdown label={t('more_actions')}>
+          {(hasPermission('edit_client') || entityAssigned(client)) && (
+            <DropdownElement
+              onClick={handleSendEmail}
+              icon={<Icon element={MdSend} />}
+            >
+              {t('email')}
+            </DropdownElement>
+          )}
+          <DropdownElement
+            onClick={downloadPdf}
+            icon={<Icon element={MdDownload} />}
+          >
+            {t('download')}
+          </DropdownElement>
+          {(isAdmin || isOwner) && (
+            <DropdownElement
+              onClick={() => scheduleStatement(statement)}
+              icon={<Icon element={MdSchedule} />}
+            >
+              {t('schedule')}
+            </DropdownElement>
+          )}
+        </Dropdown>
+      }
+    >
+      <div className="grid grid-cols-12 space-y-4 xl:space-y-0 xl:gap-4">
+        <Card className="col-span-12 xl:col-span-4 h-max" withContainer>
+          <SelectField
+            label={t('date_range')}
+            value={selectRange}
+            onValueChange={handleSelectRangeChange}
+          >
+            {dates.map((date, index) => (
+              <option key={index} value={date.id}>
+                {t(date.id)}
+              </option>
+            ))}
+          </SelectField>
+
+          {selectRange === 'custom' && (
+            <InputField
+              label={t('start_date')}
+              type="date"
+              value={statement.start_date}
+              onValueChange={(value) =>
+                value.length > 1 &&
+                setStatement((current) => ({ ...current, start_date: value }))
+              }
+            />
+          )}
+
+          {selectRange === 'custom' && (
+            <InputField
+              label={t('end_date')}
+              type="date"
+              value={statement.end_date}
+              onValueChange={(value) =>
+                value.length > 1 &&
+                setStatement((current) => ({ ...current, end_date: value }))
+              }
+            />
+          )}
+        </Card>
+
+        <Card className="col-span-12 xl:col-span-4 h-max" withContainer>
+          <SelectField
+            label={t('status')}
+            value={statement.status}
+            onValueChange={(value) =>
+              setStatement((current) => ({
+                ...current,
+                status: value as StatementStatus,
+              }))
+            }
+          >
+            <option value="all">{t('all')}</option>
+            <option value="paid">{t('paid')}</option>
+            <option value="unpaid">{t('unpaid')}</option>
+          </SelectField>
+        </Card>
+
+        <Card className="col-span-12 xl:col-span-4 h-max">
+          <Element leftSide={t('credits')}>
+            <Toggle
+              checked={statement.show_credits_table}
+              onValueChange={(value) =>
+                setStatement((current) => ({
+                  ...current,
+                  show_credits_table: value,
+                }))
+              }
+            />
+          </Element>
+
+          <Element leftSide={t('payments')}>
+            <Toggle
+              checked={statement.show_payments_table}
+              onValueChange={(value) =>
+                setStatement((current) => ({
+                  ...current,
+                  show_payments_table: value,
+                }))
+              }
+            />
+          </Element>
+
+          <Element leftSide={t('aging')}>
+            <Toggle
+              checked={statement.show_aging_table}
+              onValueChange={(value) =>
+                setStatement((current) => ({
+                  ...current,
+                  show_aging_table: value,
+                }))
+              }
+            />
+          </Element>
+        </Card>
+      </div>
+
+      <iframe
+        className="my-6"
+        ref={iframeRef}
+        width="100%"
+        height={1500}
+        style={{ display: !isLoadingPdf ? 'block' : 'none' }}
+        tabIndex={-1}
+        loading="lazy"
+      />
+
+      {isLoadingPdf && (
+        <div
+          className="flex justify-center items-center mt-6"
+          style={{ height: 1500 }}
+        >
+          <Spinner />
+        </div>
+      )}
+    </Default>
+  );
+}

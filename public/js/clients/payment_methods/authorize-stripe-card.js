@@ -100,11 +100,11 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
 /**
- * Invoice Ninja (https://invoiceninja.com)
+ * Gestoremio (https://invoiceninja.com)
  *
  * @link https://github.com/invoiceninja/invoiceninja source repository
  *
- * @copyright Copyright (c) 2020. Invoice Ninja LLC (https://invoiceninja.com)
+ * @copyright Copyright (c) 2020. Gestoremio LLC (https://invoiceninja.com)
  *
  * @license https://www.elastic.co/licensing/elastic-license 
  */

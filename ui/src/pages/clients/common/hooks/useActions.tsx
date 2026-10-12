@@ -1,0 +1,204 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { Dispatch, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  MdArchive,
+  MdCloudCircle,
+  MdComment,
+  MdDelete,
+  MdDesignServices,
+  MdEdit,
+  MdPictureAsPdf,
+  MdRestore,
+  MdSettings,
+} from 'react-icons/md';
+import { EntityState } from '$app/common/enums/entity-state';
+import { getEntityState } from '$app/common/helpers';
+import { route } from '$app/common/helpers/route';
+import { useAdmin } from '$app/common/hooks/permissions/useHasPermission';
+import { useDisplayRunTemplateActions } from '$app/common/hooks/useDisplayRunTemplateActions';
+import { useEntityPageIdentifier } from '$app/common/hooks/useEntityPageIdentifier';
+import { Client } from '$app/common/interfaces/client';
+import { useBulk } from '$app/common/queries/clients';
+import { Divider } from '$app/components/cards/Divider';
+import { DropdownElement } from '$app/components/dropdown/DropdownElement';
+import { Icon } from '$app/components/icons/Icon';
+import { Action } from '$app/components/ResourceActions';
+import { AddActivityComment } from '$app/pages/dashboard/hooks/useGenerateActivityElement';
+import { useChangeTemplate } from '$app/pages/settings/invoice-design/pages/custom-designs/components/ChangeTemplate';
+import { CloneAction } from '../components/CloneAction';
+import { EntityCreationModalAction } from '../components/EntityCreationModalAction';
+import { MergeClientAction } from '../components/MergeClientAction';
+import { PurgeClientAction } from '../components/PurgeClientAction';
+import { useConfigureClientSettings } from './useConfigureClientSettings';
+
+interface Params {
+  showEditAction?: boolean;
+  setIsPurgeOrMergeActionCalled?: Dispatch<SetStateAction<boolean>>;
+}
+export function useActions(params?: Params) {
+  const [t] = useTranslation();
+  const bulk = useBulk();
+
+  const { showEditAction, setIsPurgeOrMergeActionCalled } = params || {};
+
+  const { isAdmin, isOwner } = useAdmin();
+  const { shouldBeVisible: shouldBeRunTemplateActionVisible } =
+    useDisplayRunTemplateActions();
+
+  const { isEditOrShowPage, isShowPage } = useEntityPageIdentifier({
+    entity: 'client',
+  });
+
+  const configureClientSettings = useConfigureClientSettings();
+
+  const {
+    setChangeTemplateVisible,
+    setChangeTemplateResources,
+    setChangeTemplateEntityContext,
+  } = useChangeTemplate();
+
+  const actions: Action<Client>[] = [
+    (client) =>
+      Boolean(showEditAction) && (
+        <DropdownElement
+          to={route('/clients/:id/edit', { id: client.id })}
+          icon={<Icon element={MdEdit} />}
+        >
+          {t('edit')}
+        </DropdownElement>
+      ),
+    () => Boolean(showEditAction) && <Divider withoutPadding />,
+    (client) =>
+      !client.is_deleted && (
+        <DropdownElement
+          to={route('/clients/:id/statement', { id: client.id })}
+          icon={<Icon element={MdPictureAsPdf} />}
+        >
+          {t('view_statement')}
+        </DropdownElement>
+      ),
+    (client) =>
+      Boolean(!client.is_deleted && !isShowPage) && (
+        <DropdownElement
+          onClick={() =>
+            window.open(
+              route(
+                `${client.contacts[0].link}?silent=true&client_hash=:clientHash`,
+                {
+                  clientHash: client.client_hash,
+                }
+              ),
+              '__blank'
+            )
+          }
+          icon={<Icon element={MdCloudCircle} />}
+        >
+          {t('client_portal')}
+        </DropdownElement>
+      ),
+    (client) => <CloneAction client={client} />,
+    (client) => (
+      <AddActivityComment
+        entity="client"
+        entityId={client.id}
+        label={client.display_name}
+        labelElement={
+          <DropdownElement icon={<Icon element={MdComment} />}>
+            {t('add_comment')}
+          </DropdownElement>
+        }
+      />
+    ),
+    (client) =>
+      !client.is_deleted &&
+      (isAdmin || isOwner) && (
+        <DropdownElement
+          onClick={() => configureClientSettings(client)}
+          icon={<Icon element={MdSettings} />}
+        >
+          {t('settings')}
+        </DropdownElement>
+      ),
+    (client) => <EntityCreationModalAction client={client} />,
+    (client) =>
+      !client.is_deleted &&
+      (isAdmin || isOwner) &&
+      client && (
+        <MergeClientAction
+          client={client}
+          setIsPurgeOrMergeActionCalled={setIsPurgeOrMergeActionCalled}
+        />
+      ),
+    (client) =>
+      shouldBeRunTemplateActionVisible && (
+        <DropdownElement
+          onClick={() => {
+            setChangeTemplateVisible(true);
+            setChangeTemplateResources([client]);
+            setChangeTemplateEntityContext({
+              endpoint: '/api/v1/clients/bulk',
+              entity: 'clients',
+            });
+          }}
+          icon={<Icon element={MdDesignServices} />}
+        >
+          {t('run_template')}
+        </DropdownElement>
+      ),
+    (client) =>
+      isEditOrShowPage && !client.is_deleted && <Divider withoutPadding />,
+    (client) =>
+      isEditOrShowPage &&
+      getEntityState(client) === EntityState.Active && (
+        <DropdownElement
+          onClick={() => bulk([client.id], 'archive')}
+          icon={<Icon element={MdArchive} />}
+        >
+          {t('archive')}
+        </DropdownElement>
+      ),
+    (client) =>
+      isEditOrShowPage &&
+      (getEntityState(client) === EntityState.Archived ||
+        getEntityState(client) === EntityState.Deleted) && (
+        <DropdownElement
+          onClick={() => bulk([client.id], 'restore')}
+          icon={<Icon element={MdRestore} />}
+        >
+          {t('restore')}
+        </DropdownElement>
+      ),
+    (client) =>
+      isEditOrShowPage &&
+      (getEntityState(client) === EntityState.Active ||
+        getEntityState(client) === EntityState.Archived) && (
+        <DropdownElement
+          onClick={() => bulk([client.id], 'delete')}
+          icon={<Icon element={MdDelete} />}
+        >
+          {t('delete')}
+        </DropdownElement>
+      ),
+    (client) =>
+      (isAdmin || isOwner) &&
+      client && (
+        <PurgeClientAction
+          key="purge"
+          client={client}
+          setIsPurgeOrMergeActionCalled={setIsPurgeOrMergeActionCalled}
+        />
+      ),
+  ];
+
+  return actions;
+}

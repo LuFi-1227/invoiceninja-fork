@@ -1,0 +1,42 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+import colors from '$app/common/constants/colors';
+import { updateChanges } from '$app/common/stores/slices/user';
+import { ColorPicker } from '$app/components/forms/ColorPicker';
+import { RootState } from '../../../../common/stores/store';
+import { Element } from '../../../../components/cards';
+
+export function AccentColor() {
+  const [t] = useTranslation();
+  const dispatch = useDispatch();
+
+  const userChanges = useSelector((state: RootState) => state.user.changes);
+
+  return (
+    <Element leftSide={t('accent_color')}>
+      <ColorPicker
+        value={
+          userChanges?.company_user?.settings?.accent_color || colors.primary
+        }
+        onValueChange={(color) =>
+          dispatch(
+            updateChanges({
+              property: 'company_user.settings.accent_color',
+              value: color,
+            })
+          )
+        }
+      />
+    </Element>
+  );
+}

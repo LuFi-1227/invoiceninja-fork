@@ -1,0 +1,221 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
+import styled from 'styled-components';
+import { fullTableLatestDataAtom } from '$app/common/atoms/data-table';
+import { useColorScheme } from '$app/common/colors';
+import { route } from '$app/common/helpers/route';
+import { useEntityPageIdentifier } from '$app/common/hooks/useEntityPageIdentifier';
+import { usePreventNavigation } from '$app/common/hooks/usePreventNavigation';
+import { Client } from '$app/common/interfaces/client';
+import { Credit } from '$app/common/interfaces/credit';
+import { Expense } from '$app/common/interfaces/expense';
+import { Invoice } from '$app/common/interfaces/invoice';
+import { Payment } from '$app/common/interfaces/payment';
+import { Product } from '$app/common/interfaces/product';
+import { Project } from '$app/common/interfaces/project';
+import { PurchaseOrder } from '$app/common/interfaces/purchase-order';
+import { Quote } from '$app/common/interfaces/quote';
+import { RecurringExpense } from '$app/common/interfaces/recurring-expense';
+import { RecurringInvoice } from '$app/common/interfaces/recurring-invoice';
+import { Task } from '$app/common/interfaces/task';
+import { Transaction } from '$app/common/interfaces/transactions';
+import { Vendor } from '$app/common/interfaces/vendor';
+import { ChevronLeft } from './icons/ChevronLeft';
+import { ChevronRight } from './icons/ChevronRight';
+import { Tooltip } from './Tooltip';
+
+const Button = styled.div`
+  background-color: ${(props) => props.theme.backgroundColor};
+  border-color: ${(props) => props.theme.borderColor};
+
+  &:hover {
+    background-color: ${(props) => props.theme.hoverColor};
+  }
+`;
+
+type Entity =
+  | 'recurring_invoice'
+  | 'invoice'
+  | 'project'
+  | 'client'
+  | 'product'
+  | 'payment'
+  | 'quote'
+  | 'credit'
+  | 'task'
+  | 'vendor'
+  | 'purchase_order'
+  | 'expense'
+  | 'recurring_expense'
+  | 'transaction';
+
+export type Resource =
+  | RecurringInvoice
+  | Invoice
+  | Project
+  | Client
+  | Product
+  | Payment
+  | Quote
+  | Credit
+  | Task
+  | Vendor
+  | PurchaseOrder
+  | Expense
+  | RecurringExpense
+  | Transaction;
+
+interface Props {
+  entity: Entity;
+  entityEndpointName?: 'bank_transaction';
+}
+
+export function PreviousNextNavigation({ entity }: Props) {
+  const { id } = useParams();
+
+  const [t] = useTranslation();
+  const navigate = useNavigate();
+  const preventNavigation = usePreventNavigation();
+
+  const colors = useColorScheme();
+  const { isEditPage } = useEntityPageIdentifier({ entity });
+
+  const navigationData = useAtomValue(fullTableLatestDataAtom);
+
+  const currentList = useMemo(() => {
+    if (navigationData?.type !== entity) {
+      return undefined;
+    }
+
+    return navigationData.resources as Resource[] | undefined;
+  }, [navigationData, entity]);
+
+  const getPreviousIndex = () => {
+    const currentIndex =
+      currentList?.findIndex((resource) => resource.id === id) ?? -1;
+
+    if (currentIndex <= 0) return null;
+
+    return currentIndex - 1;
+  };
+
+  const getNextIndex = () => {
+    const currentIndex =
+      currentList?.findIndex((resource) => resource.id === id) ?? -1;
+
+    if (currentIndex === -1 || currentIndex === (currentList?.length ?? 0) - 1)
+      return null;
+
+    return currentIndex + 1;
+  };
+
+  const navigateToPrevious = () => {
+    const previousIndex = getPreviousIndex();
+
+    if (previousIndex !== null && currentList) {
+      navigate(
+        route(`/${entity}s/:id/${isEditPage ? 'edit' : ''}`, {
+          id: currentList[previousIndex].id,
+        })
+      );
+    }
+  };
+
+  const navigateToNext = () => {
+    const nextIndex = getNextIndex();
+
+    if (nextIndex !== null && currentList) {
+      navigate(
+        route(`/${entity}s/:id/${isEditPage ? 'edit' : ''}`, {
+          id: currentList[nextIndex].id,
+        })
+      );
+    }
+  };
+
+  if (
+    !id ||
+    !currentList?.length ||
+    currentList.length === 1 ||
+    !currentList.find((resource) => resource.id === id)
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="relative flex flex-1 space-x-2 items-center justify-end">
+      <Tooltip
+        message={t('previous') as string}
+        width="auto"
+        placement="bottom"
+        withoutArrow
+        withoutWrapping
+      >
+        <Button
+          className={classNames(
+            'p-2 sm:p-[0.725rem] border rounded-md shadow-sm',
+            {
+              'cursor-not-allowed opacity-50': getPreviousIndex() === null,
+              'cursor-pointer': getPreviousIndex() !== null,
+            }
+          )}
+          onClick={() => {
+            preventNavigation({
+              fn: () => navigateToPrevious(),
+            });
+          }}
+          theme={{
+            hoverColor: colors.$4,
+            backgroundColor: colors.$1,
+            borderColor: colors.$24,
+          }}
+        >
+          <ChevronLeft size="0.9rem" color={colors.$3} />
+        </Button>
+      </Tooltip>
+
+      <Tooltip
+        message={t('next') as string}
+        width="auto"
+        placement="bottom"
+        withoutArrow
+        withoutWrapping
+      >
+        <Button
+          className={classNames(
+            'p-2 sm:p-[0.725rem] border rounded-md shadow-sm',
+            {
+              'cursor-not-allowed opacity-50': getNextIndex() === null,
+              'cursor-pointer': getNextIndex() !== null,
+            }
+          )}
+          onClick={() => {
+            preventNavigation({
+              fn: () => navigateToNext(),
+            });
+          }}
+          theme={{
+            hoverColor: colors.$4,
+            backgroundColor: colors.$1,
+            borderColor: colors.$24,
+          }}
+        >
+          <ChevronRight size="0.9rem" color={colors.$3} />
+        </Button>
+      </Tooltip>
+    </div>
+  );
+}

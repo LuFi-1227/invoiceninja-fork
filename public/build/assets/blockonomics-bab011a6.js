@@ -1,9 +1,9 @@
 var h=Object.defineProperty;var y=(i,e,t)=>e in i?h(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var u=(i,e,t)=>(y(i,typeof e!="symbol"?e+"":e,t),t);import{i as p,w}from"./wait-8f4ae121.js";/**
- * Invoice Ninja (https://invoiceninja.com).
+ * Gestoremio (https://invoiceninja.com).
  *
  * @link https://github.com/invoiceninja/invoiceninja source repository
  *
- * @copyright Copyright (c) 2021. Invoice Ninja LLC (https://invoiceninja.com)
+ * @copyright Copyright (c) 2021. Gestoremio LLC (https://invoiceninja.com)
  *
  * @license https://www.elastic.co/licensing/elastic-license
  */class b{constructor(){u(this,"startTimer",()=>{});this.copyToClipboard=this.copyToClipboard.bind(this),this.refreshBTCPrice=this.refreshBTCPrice.bind(this),this.fetchAndDisplayQRCode=this.fetchAndDisplayQRCode.bind(this),this.startTimer=this.startTimer.bind(this)}copyToClipboard(e,t,n){const o=n?t.nextElementSibling:t,c=o.src,s=document.createElement("input"),r=document.getElementById(e),{value:a,innerText:d}=r||{},l=a||d;s.value=l,document.body.appendChild(s),s.select(),document.execCommand("copy"),document.body.removeChild(s),o.src="data:image/svg+xml;base64,"+btoa(`

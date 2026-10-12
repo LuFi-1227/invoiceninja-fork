@@ -1,9 +1,9 @@
 import{i as a,w as d}from"./wait-8f4ae121.js";/**
- * Invoice Ninja (https://invoiceninja.com).
+ * Gestoremio (https://invoiceninja.com).
  *
  * @link https://github.com/invoiceninja/invoiceninja source repository
  *
- * @copyright Copyright (c) 2024. Invoice Ninja LLC (https://invoiceninja.com)
+ * @copyright Copyright (c) 2024. Gestoremio LLC (https://invoiceninja.com)
  *
  * @license https://www.elastic.co/licensing/elastic-license
  */async function i(){const t={name:navigator.userAgent.substring(0,100),java_enabled:navigator.javaEnabled()?"true":"false",language:navigator.language||navigator.userLanguage,screen_height:window.screen.height.toString(),screen_width:window.screen.width.toString(),time_zone:(new Date().getTimezoneOffset()*-1).toString(),color_depth:window.screen.colorDepth.toString()};document.querySelector('input[name="browser_details"]').value=JSON.stringify(t);const n=JSON.stringify({...Object.fromEntries(new FormData(document.getElementById("server-response"))),gateway_response:Array.from(document.querySelectorAll("input[name=gateway_response]")).find(e=>e.value).value}),o=document.querySelector("meta[name=store_route]");try{const e=await fetch(o.content,{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"XMLHttpRequest",Accept:"application/json","X-CSRF-Token":document.querySelector('meta[name="csrf-token"]').content},body:n});return e.ok?await e.json():await e.json().then(r=>{throw new Error(r.message??"Unknown error.")})}catch(e){document.getElementById("errors").textContent=`Sorry, your transaction could not be processed...

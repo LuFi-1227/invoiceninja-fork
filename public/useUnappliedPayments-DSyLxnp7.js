@@ -1,0 +1,1 @@
+import{Dt as e,Ei as t,zt as n}from"./forms-_xPIb7_B.js";function r({clientId:r}){let{data:i=[],isLoading:a}=t({queryKey:[`/api/v1/payments`,r,`partially_unapplied`],queryFn:()=>n(`GET`,e(`/api/v1/payments?client_id=:client_id&client_status=partially_unapplied`,{client_id:r})).then(e=>e.data.data),enabled:!!r,staleTime:1/0});return{payments:i,isLoading:a}}export{r as t};

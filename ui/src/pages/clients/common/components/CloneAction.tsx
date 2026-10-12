@@ -1,0 +1,68 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MdControlPointDuplicate } from 'react-icons/md';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Client } from '$app/common/interfaces/client';
+import { useBulk } from '$app/common/queries/clients';
+import { DropdownElement } from '$app/components/dropdown/DropdownElement';
+import { Button } from '$app/components/forms';
+import { Icon } from '$app/components/icons/Icon';
+import { Modal } from '$app/components/Modal';
+
+interface Props {
+  client: Client;
+}
+
+export function CloneAction({ client }: Props) {
+  const [t] = useTranslation();
+  const navigate = useNavigate();
+
+  const { id } = useParams();
+
+  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+
+  const bulk = useBulk({
+    onSuccess: () => {
+      setIsModalVisible(false);
+
+      if (id) {
+        setTimeout(() => {
+          navigate('/clients');
+        }, 150);
+      }
+    },
+  });
+
+  return (
+    <>
+      <Modal
+        title={t('are_you_sure')}
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+      >
+        <div className="flex flex-col space-y-6">
+          <span className="font-medium text-sm">
+            {t('clone_client_description')}
+          </span>
+
+          <Button
+            behavior="button"
+            onClick={() => bulk([client.id], 'clone')}
+            disableWithoutIcon
+          >
+            {t('continue')}
+          </Button>
+        </div>
+      </Modal>
+
+      {Boolean(client && !client.is_deleted) && (
+        <DropdownElement
+          onClick={() => setIsModalVisible(true)}
+          icon={<Icon element={MdControlPointDuplicate} />}
+        >
+          {t('clone')}
+        </DropdownElement>
+      )}
+    </>
+  );
+}

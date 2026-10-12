@@ -1,0 +1,570 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { Schedule } from '$app/common/interfaces/schedule';
+import { TAG_ENTITY_TYPES } from '$app/common/interfaces/tag';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { Element } from '$app/components/cards';
+import { InputField, SelectField } from '$app/components/forms';
+import Toggle from '$app/components/forms/Toggle';
+import { ProductItemsSelector } from '$app/pages/reports/common/components/ProductItemsSelector';
+import { StatusSelector } from '$app/pages/reports/common/components/StatusSelector';
+import { Identifier, useReports } from '$app/pages/reports/common/useReports';
+import { ranges } from '$app/pages/reports/index/Reports';
+import { useTranslation } from 'react-i18next';
+import { ClientSelector } from '$app/components/clients/ClientSelector';
+import { MultiClientSelector } from '$app/pages/reports/common/components/MultiClientSelector';
+import { MultiVendorSelector } from '$app/pages/reports/common/components/MultiVendorSelector';
+import { MultiProjectSelector } from '$app/pages/reports/common/components/MultiProjectSelector';
+import { MultiTagSelector } from '$app/pages/reports/common/components/MultiTagSelector';
+import { REPORT_TAG_ENTITY_TYPES } from '$app/pages/reports/common/hooks/useShowReportField';
+import { MultiExpenseCategorySelector } from '$app/pages/reports/common/components/MultiExpenseCategorySelector';
+import { TemplateSelector } from '$app/pages/reports/common/components/TemplateSelector';
+import { useGroupByOptions } from '$app/pages/reports/common/hooks/useGroupByOptions';
+
+interface Props {
+  schedule: Schedule;
+  handleChange: (
+    property: keyof Schedule,
+    value: Schedule[keyof Schedule]
+  ) => void;
+  errors: ValidationBag | undefined;
+}
+
+type ReportFiled =
+  | 'send_email'
+  | 'range'
+  | 'status'
+  | 'products'
+  | 'client'
+  | 'expense_billed'
+  | 'income_billed'
+  | 'start_date'
+  | 'end_date'
+  | 'include_tax'
+  | 'document_email_attachment'
+  | 'clients'
+  | 'vendors'
+  | 'categories'
+  | 'projects'
+  | 'tags'
+  | 'report_keys'
+  | 'include_deleted'
+  | 'template_id'
+  | 'pdf_email_attachment'
+  | 'group_by';
+
+export const DEFAULT_REPORT_FIELDS: ReportFiled[] = [
+  'send_email',
+  'range',
+  'start_date',
+  'end_date',
+];
+
+export const REPORTS_FIELDS: Record<string, ReportFiled[]> = {
+  invoice: [
+    ...DEFAULT_REPORT_FIELDS,
+    'status',
+    'document_email_attachment',
+    'report_keys',
+    'include_deleted',
+    'client',
+    'pdf_email_attachment',
+    'template_id',
+    'group_by',
+  ],
+  invoice_item: [
+    ...DEFAULT_REPORT_FIELDS,
+    'products',
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'client',
+    'template_id',
+    'group_by',
+  ],
+  product_sales: [...DEFAULT_REPORT_FIELDS, 'products', 'client', 'group_by'],
+  profitloss: [
+    ...DEFAULT_REPORT_FIELDS,
+    'expense_billed',
+    'income_billed',
+    'include_tax',
+    'group_by',
+  ],
+  client: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'include_deleted',
+    'template_id',
+    'group_by',
+  ],
+  contact: [...DEFAULT_REPORT_FIELDS, 'report_keys', 'template_id', 'group_by'],
+  recurring_invoice: [
+    ...DEFAULT_REPORT_FIELDS,
+    'report_keys',
+    'status',
+    'include_deleted',
+    'client',
+    'template_id',
+    'group_by',
+  ],
+  quote: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'client',
+    'pdf_email_attachment',
+    'template_id',
+    'group_by',
+  ],
+  quote_item: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'client',
+    'template_id',
+    'group_by',
+  ],
+  credit: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'include_deleted',
+    'status',
+    'client',
+    'pdf_email_attachment',
+    'template_id',
+    'group_by',
+  ],
+  document: [...DEFAULT_REPORT_FIELDS, 'document_email_attachment', 'group_by'],
+  payment: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'client',
+    'template_id',
+    'group_by',
+  ],
+  expense: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'clients',
+    'vendors',
+    'projects',
+    'categories',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'template_id',
+    'group_by',
+  ],
+  task: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'client',
+    'tags',
+    'template_id',
+    'group_by',
+  ],
+  project: [
+    ...DEFAULT_REPORT_FIELDS,
+    'clients',
+    'projects',
+    'tags',
+    'group_by',
+  ],
+  product: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'template_id',
+    'group_by',
+  ],
+  vendor: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'template_id',
+    'group_by',
+  ],
+  purchase_order: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'pdf_email_attachment',
+    'template_id',
+    'group_by',
+  ],
+  purchase_order_item: [
+    ...DEFAULT_REPORT_FIELDS,
+    'document_email_attachment',
+    'report_keys',
+    'status',
+    'include_deleted',
+    'template_id',
+    'group_by',
+  ],
+};
+
+export function EmailReport(props: Props) {
+  const [t] = useTranslation();
+  const reports = useReports();
+
+  const { schedule, handleChange, errors } = props;
+
+  const groupByOptions = useGroupByOptions(
+    schedule.parameters.report_name as Identifier
+  );
+
+  const showReportFiled = (field: ReportFiled) => {
+    if (field === 'tags') {
+      return (
+        (schedule.parameters.report_name as Identifier) in
+        REPORT_TAG_ENTITY_TYPES
+      );
+    }
+
+    return (
+      REPORTS_FIELDS[schedule.parameters.report_name] || DEFAULT_REPORT_FIELDS
+    ).includes(field);
+  };
+
+  return (
+    <>
+      <Element leftSide={t('report')}>
+        <SelectField
+          value={schedule.parameters.report_name}
+          onValueChange={(value) =>
+            handleChange('parameters.report_name' as keyof Schedule, value)
+          }
+          errorMessage={errors?.errors['parameters.report_name']}
+          cypressRef="scheduleReportName"
+          customSelector
+          dismissable={false}
+        >
+          {reports.map((report, i) => (
+            <option
+              key={i}
+              value={report.schedule_identifier || report.identifier}
+            >
+              {t(report.label)}
+            </option>
+          ))}
+        </SelectField>
+      </Element>
+
+      {showReportFiled('send_email') && (
+        <Element leftSide={t('send_email')}>
+          <Toggle
+            checked={schedule.parameters.send_email}
+            onValueChange={(value) =>
+              handleChange('parameters.send_email' as keyof Schedule, value)
+            }
+            disabled
+            cypressRef="scheduleSendEmail"
+          />
+        </Element>
+      )}
+
+      {showReportFiled('document_email_attachment') && (
+        <Element leftSide={t('document_email_attachment')}>
+          <Toggle
+            checked={schedule.parameters.document_email_attachment}
+            onValueChange={(value) =>
+              handleChange(
+                'parameters.document_email_attachment' as keyof Schedule,
+                value
+              )
+            }
+            cypressRef="scheduleDocumentEmailAttachment"
+          />
+        </Element>
+      )}
+
+      {showReportFiled('pdf_email_attachment') && (
+        <Element leftSide={t('attach_pdf')}>
+          <Toggle
+            checked={schedule.parameters.pdf_email_attachment}
+            onValueChange={(value) =>
+              handleChange(
+                'parameters.pdf_email_attachment' as keyof Schedule,
+                value
+              )
+            }
+          />
+        </Element>
+      )}
+
+      {showReportFiled('expense_billed') && (
+        <Element leftSide={t('expense_paid_report')}>
+          <Toggle
+            checked={schedule.parameters.is_expense_billed}
+            onValueChange={(value) =>
+              handleChange(
+                'parameters.is_expense_billed' as keyof Schedule,
+                value
+              )
+            }
+            cypressRef="expenseBilled"
+          />
+        </Element>
+      )}
+
+      {showReportFiled('income_billed') && (
+        <Element leftSide={t('cash_vs_accrual')}>
+          <Toggle
+            checked={schedule.parameters.is_income_billed}
+            onValueChange={(value) =>
+              handleChange(
+                'parameters.is_income_billed' as keyof Schedule,
+                value
+              )
+            }
+            cypressRef="incomeBilled"
+          />
+        </Element>
+      )}
+
+      {showReportFiled('include_tax') && (
+        <Element leftSide={t('include_tax')}>
+          <Toggle
+            checked={schedule.parameters.include_tax}
+            onValueChange={(value) =>
+              handleChange('parameters.include_tax' as keyof Schedule, value)
+            }
+            cypressRef="includeTax"
+          />
+        </Element>
+      )}
+
+      {showReportFiled('include_deleted') && (
+        <Element
+          leftSide={t('include_deleted')}
+          leftSideHelp={t('include_deleted_help')}
+        >
+          <Toggle
+            checked={schedule.parameters.include_deleted}
+            onValueChange={(value) =>
+              handleChange(
+                'parameters.include_deleted' as keyof Schedule,
+                value
+              )
+            }
+            cypressRef="includeDeleted"
+          />
+        </Element>
+      )}
+
+      {showReportFiled('status') && (
+        <Element leftSide={t('status')}>
+          <StatusSelector
+            report={schedule.parameters.report_name as Identifier}
+            value={schedule.parameters.status}
+            onValueChange={(value) =>
+              handleChange('parameters.status' as keyof Schedule, value)
+            }
+            errorMessage={errors?.errors['parameters.status']}
+          />
+        </Element>
+      )}
+
+      {showReportFiled('products') && (
+        <ProductItemsSelector
+          value={schedule.parameters.product_key}
+          onValueChange={(value) =>
+            handleChange('parameters.product_key' as keyof Schedule, value)
+          }
+          errorMessage={errors?.errors['parameters.product_key']}
+        />
+      )}
+
+      {showReportFiled('range') && (
+        <Element leftSide={t('range')}>
+          <SelectField
+            value={schedule.parameters.date_range}
+            onValueChange={(value) =>
+              handleChange('parameters.date_range' as keyof Schedule, value)
+            }
+            errorMessage={errors?.errors['parameters.date_range']}
+            cypressRef="scheduleDateRange"
+            customSelector
+            dismissable={false}
+          >
+            {ranges.map((range, i) => (
+              <option value={range.scheduleIdentifier} key={i}>
+                {t(range.label)}
+              </option>
+            ))}
+          </SelectField>
+        </Element>
+      )}
+
+      {showReportFiled('range') &&
+        schedule.parameters.date_range === 'custom' && (
+          <>
+            <Element leftSide={t('start_date')}>
+              <InputField
+                type="date"
+                value={schedule.parameters.start_date}
+                onValueChange={(value) =>
+                  handleChange('parameters.start_date' as keyof Schedule, value)
+                }
+                errorMessage={errors?.errors['parameters.start_date']}
+                cypressRef="scheduleStartDate"
+              />
+            </Element>
+
+            <Element leftSide={t('end_date')}>
+              <InputField
+                type="date"
+                value={schedule.parameters.end_date}
+                onValueChange={(value) =>
+                  handleChange('parameters.end_date' as keyof Schedule, value)
+                }
+                errorMessage={errors?.errors['parameters.end_date']}
+                cypressRef="scheduleEndDate"
+              />
+            </Element>
+          </>
+        )}
+
+      {showReportFiled('client') && (
+        <Element leftSide={t('client')}>
+          <ClientSelector
+            value={schedule.parameters.client_id}
+            onChange={(client) =>
+              handleChange('parameters.client_id' as keyof Schedule, client.id)
+            }
+            clearButton
+            onClearButtonClick={() =>
+              handleChange('parameters.client_id' as keyof Schedule, '')
+            }
+            withoutAction={true}
+            errorMessage={errors?.errors['parameters.client_id']}
+          />
+        </Element>
+      )}
+
+      {showReportFiled('clients') && (
+        <MultiClientSelector
+          value={schedule.parameters.clients.join(',')}
+          onValueChange={(clientIds) => {
+            const updatedParameters = { ...schedule.parameters };
+
+            updatedParameters.clients = clientIds
+              ? [...clientIds.split(',')]
+              : [];
+
+            handleChange('parameters', updatedParameters);
+          }}
+          errorMessage={errors?.errors['parameters.clients']}
+        />
+      )}
+
+      {showReportFiled('vendors') && (
+        <MultiVendorSelector
+          value={schedule.parameters.vendors}
+          onValueChange={(vendorIds) =>
+            handleChange('parameters.vendors' as keyof Schedule, vendorIds)
+          }
+          errorMessage={errors?.errors['parameters.vendors']}
+        />
+      )}
+
+      {showReportFiled('projects') && (
+        <MultiProjectSelector
+          value={schedule.parameters.projects}
+          onValueChange={(projectIds) =>
+            handleChange('parameters.projects' as keyof Schedule, projectIds)
+          }
+          errorMessage={errors?.errors['parameters.projects']}
+        />
+      )}
+
+      {showReportFiled('tags') && (
+        <MultiTagSelector
+          entityType={
+            REPORT_TAG_ENTITY_TYPES[
+              schedule.parameters.report_name as Identifier
+            ] ?? TAG_ENTITY_TYPES.invoice
+          }
+          value={schedule.parameters.tag_ids}
+          onValueChange={(tagIds) =>
+            handleChange('parameters.tag_ids' as keyof Schedule, tagIds)
+          }
+          errorMessage={errors?.errors['parameters.tag_ids']}
+        />
+      )}
+
+      {showReportFiled('categories') && (
+        <MultiExpenseCategorySelector
+          value={schedule.parameters.categories}
+          onValueChange={(expenseCategoryIds) =>
+            handleChange(
+              'parameters.categories' as keyof Schedule,
+              expenseCategoryIds
+            )
+          }
+          errorMessage={errors?.errors['parameters.categories']}
+        />
+      )}
+
+      {showReportFiled('template_id') && (
+        <Element leftSide={t('template')}>
+          <TemplateSelector
+            value={schedule.parameters.template_id}
+            onChange={(design) =>
+              handleChange(
+                'parameters.template_id' as keyof Schedule,
+                design.id
+              )
+            }
+            clearButton
+            onClearButtonClick={() =>
+              handleChange('parameters.template_id' as keyof Schedule, '')
+            }
+            entity={schedule.parameters.report_name as Identifier}
+          />
+        </Element>
+      )}
+
+      {showReportFiled('group_by') && groupByOptions.length > 0 && (
+        <Element leftSide={t('group_by')}>
+          <SelectField
+            value={schedule.parameters.group_by || ''}
+            onValueChange={(value) =>
+              handleChange('parameters.group_by' as keyof Schedule, value)
+            }
+            customSelector
+            dismissable={false}
+          >
+            <option value="">{t('none')}</option>
+            {groupByOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </SelectField>
+        </Element>
+      )}
+    </>
+  );
+}

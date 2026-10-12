@@ -254,7 +254,7 @@ class WhatsAppService
     /**
      * Send invoice notification via WhatsApp.
      */
-    public function sendInvoice(Invoice $invoice, ?string $customPhone = null, ?string $customMessage = null, ?bool $sendPdf = null): array
+    public function sendInvoice(Invoice $invoice, ?string $customPhone = null, ?string $customMessage = null, ?bool $sendPdf = null, ?bool $sendBoleto = null): array
     {
         if (!$this->isConfigured()) {
             return [
@@ -296,8 +296,8 @@ class WhatsAppService
             }
         }
 
-        // 3. Send the Asaas Boleto attachment when enabled
-        $this->sendBoletoIfEnabled($invoice, $recipientPhone);
+        // 3. Send the Asaas Boleto attachment when requested/enabled
+        $this->sendBoletoIfEnabled($invoice, $recipientPhone, $sendBoleto);
 
         // Mark invoice as sent if not already sent
         $invoice->service()->markSent()->save();
@@ -432,9 +432,11 @@ class WhatsAppService
     /**
      * Send the Asaas Boleto as a document when the company has it enabled.
      */
-    protected function sendBoletoIfEnabled(Invoice $invoice, ?string $phone): void
+    protected function sendBoletoIfEnabled(Invoice $invoice, ?string $phone, ?bool $sendBoleto = null): void
     {
-        if (!($this->config['send_boleto'] ?? false) || empty($phone) || !$this->driver) {
+        $enabled = $sendBoleto !== null ? $sendBoleto : ($this->config['send_boleto'] ?? false);
+
+        if (!$enabled || empty($phone) || !$this->driver) {
             return;
         }
 

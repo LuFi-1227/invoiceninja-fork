@@ -1,0 +1,65 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { CompanyUser } from './company-user';
+import { Timestamps } from './timestamps';
+
+export type CalendarProvider = 'google' | 'microsoft';
+
+export type CalendarConnectionStatus = 'CONNECTED' | 'DISCONNECTED';
+
+// API now returns only a connection status — provider/email/calendar
+// metadata is kept server-side. Use `status === 'CONNECTED'` to gate UI
+// that depends on a live calendar connection.
+export interface CalendarConnection {
+  status: CalendarConnectionStatus;
+  email?: string;
+}
+
+interface ReferralMeta {
+  pro: number;
+  free: number;
+  enterprise: number;
+}
+
+interface UserSettings {
+  calendar_connection?: CalendarConnection | null;
+  [key: string]: unknown;
+}
+
+export interface User extends Timestamps {
+  id: string;
+  custom_value1: string;
+  custom_value2: string;
+  custom_value3: string;
+  custom_value4: string;
+  email: string;
+  email_verified_at: number;
+  first_name: string;
+  last_name: string;
+  google_2fa_secret: boolean;
+  has_password: boolean;
+  passkey_enabled?: boolean;
+  passkey_count?: number;
+  is_deleted: boolean;
+  last_confirmed_email_address: string;
+  last_login: number;
+  oauth_provider_id: string;
+  oauth_user_token: string;
+  phone: string;
+  signature: string;
+  verified_phone_number: boolean;
+  company_user?: CompanyUser;
+  language_id: string;
+  user_logged_in_notification: boolean;
+  referral_code?: string;
+  referral_meta?: ReferralMeta;
+  settings?: UserSettings;
+}

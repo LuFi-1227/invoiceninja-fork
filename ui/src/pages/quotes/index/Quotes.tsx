@@ -1,0 +1,189 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useAtom } from 'jotai';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Guard } from '$app/common/guards/Guard';
+import { or } from '$app/common/guards/guards/or';
+import { permission } from '$app/common/guards/guards/permission';
+import { route } from '$app/common/helpers/route';
+import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
+import { useDisableNavigation } from '$app/common/hooks/useDisableNavigation';
+import {
+  useEntityTagFilterColumns,
+  useTagFilterCleanup,
+} from '$app/common/hooks/useEntityTagFilters';
+import { useReactSettings } from '$app/common/hooks/useReactSettings';
+import { useTitle } from '$app/common/hooks/useTitle';
+import { Quote } from '$app/common/interfaces/quote';
+import { TAG_ENTITY_TYPES } from '$app/common/interfaces/tag';
+import { Page } from '$app/components/Breadcrumbs';
+import { DataTable } from '$app/components/DataTable';
+import { DataTableColumnsPicker } from '$app/components/DataTableColumnsPicker';
+import { DataTableFooterColumnsPicker } from '$app/components/DataTableFooterColumnsPicker';
+import { InputLabel } from '$app/components/forms';
+import { ImportButton } from '$app/components/import/ImportButton';
+import { Default } from '$app/components/layouts/Default';
+import {
+  ChangeTemplateModal,
+  useChangeTemplate,
+} from '$app/pages/settings/invoice-design/pages/custom-designs/components/ChangeTemplate';
+import {
+  QuoteSlider,
+  quoteSliderAtom,
+  quoteSliderVisibilityAtom,
+} from '../common/components/QuoteSlider';
+import {
+  defaultColumns,
+  useActions,
+  useAllQuoteColumns,
+  useQuoteColumns,
+  useQuoteFilters,
+} from '../common/hooks';
+import { useCustomBulkActions } from '../common/hooks/useCustomBulkActions';
+import { useDateRangeColumns } from '../common/hooks/useDateRangeColumns';
+import { useFooterColumns } from '../common/hooks/useFooterColumns';
+import { useQuoteQuery } from '../common/queries';
+
+export default function Quotes() {
+  const { documentTitle } = useTitle('quotes');
+
+  const [t] = useTranslation();
+  const hasPermission = useHasPermission();
+  const disableNavigation = useDisableNavigation();
+
+  const [sliderQuoteId, setSliderQuoteId] = useState<string>('');
+  const [quoteSlider, setQuoteSlider] = useAtom(quoteSliderAtom);
+  const [quoteSliderVisibility, setQuoteSliderVisibility] = useAtom(
+    quoteSliderVisibilityAtom
+  );
+
+  const actions = useActions();
+  const filters = useQuoteFilters();
+  const columns = useQuoteColumns();
+  const reactSettings = useReactSettings();
+  const quoteColumns = useAllQuoteColumns();
+  const dateRangeColumns = useDateRangeColumns();
+  const customBulkActions = useCustomBulkActions();
+  const { footerColumns, allFooterColumns } = useFooterColumns();
+
+  const selectedColumns =
+    reactSettings?.react_table_columns?.quote || defaultColumns;
+  const shouldShowTagFilter = selectedColumns.includes('tags');
+  const filterColumns = useEntityTagFilterColumns(
+    TAG_ENTITY_TYPES.quote,
+    'quote_tag_ids',
+    { enabled: shouldShowTagFilter }
+  );
+
+  useTagFilterCleanup(shouldShowTagFilter, 'quote_tag_ids');
+
+  const { data: quoteResponse } = useQuoteQuery({ id: sliderQuoteId });
+
+  const pages: Page[] = [{ name: t('quotes'), href: route('/quotes') }];
+
+  useEffect(() => {
+    if (quoteResponse && quoteSliderVisibility) {
+      setQuoteSlider(quoteResponse);
+    }
+  }, [quoteResponse, quoteSliderVisibility]);
+
+  useEffect(() => {
+    return () => setQuoteSliderVisibility(false);
+  }, []);
+
+  const {
+    changeTemplateVisible,
+    setChangeTemplateVisible,
+    changeTemplateResources,
+  } = useChangeTemplate();
+
+  return (
+    <Default title={documentTitle} breadcrumbs={pages}>
+      <DataTable
+        resource="quote"
+        columns={columns}
+        footerColumns={footerColumns}
+        endpoint={`/api/v1/quotes?include=client${
+          shouldShowTagFilter ? ',tags' : ''
+        }&without_deleted_clients=true&sort=id|desc${
+          shouldShowTagFilter ? '' : '&tag_ids='
+        }`}
+        linkToEdit="/quotes/:id/edit"
+        linkToCreate="/quotes/create"
+        bulkRoute="/api/v1/quotes/bulk"
+        customActions={actions}
+        customBulkActions={customBulkActions}
+        customFilters={filters}
+        customFilterPlaceholder="status"
+        filterColumns={shouldShowTagFilter ? filterColumns : undefined}
+        withResourcefulActions
+        rightSide={
+          <div className="flex items-center space-x-2">
+            {Boolean(reactSettings.show_table_footer) && (
+              <DataTableFooterColumnsPicker
+                table="quote"
+                columns={allFooterColumns}
+              />
+            )}
+
+            <DataTableColumnsPicker
+              columns={quoteColumns as unknown as string[]}
+              defaultColumns={defaultColumns}
+              table="quote"
+            />
+
+            <Guard
+              type="component"
+              guards={[
+                or(permission('create_quote'), permission('edit_quote')),
+              ]}
+              component={<ImportButton route="/quotes/import" />}
+            />
+          </div>
+        }
+        onTableRowClick={(quote) => {
+          setSliderQuoteId(quote.id);
+          setQuoteSliderVisibility(true);
+        }}
+        dateRangeColumns={dateRangeColumns}
+        linkToCreateGuards={[permission('create_quote')]}
+        hideEditableOptions={!hasPermission('edit_quote')}
+        enableSavingFilterPreference
+        enableSavingLatestDataForNavigation
+      />
+
+      {!disableNavigation('quote', quoteSlider) && <QuoteSlider />}
+
+      <ChangeTemplateModal<Quote>
+        entity="quote"
+        entities={changeTemplateResources as Quote[]}
+        visible={changeTemplateVisible}
+        setVisible={setChangeTemplateVisible}
+        labelFn={(quote) => (
+          <div className="flex flex-col space-y-1">
+            <InputLabel>{t('number')}</InputLabel>
+
+            <span>{quote.number}</span>
+          </div>
+        )}
+        bulkLabelFn={(quote) => (
+          <div className="flex space-x-2">
+            <InputLabel>{t('number')}:</InputLabel>
+
+            <span>{quote.number}</span>
+          </div>
+        )}
+        bulkUrl="/api/v1/quotes/bulk"
+      />
+    </Default>
+  );
+}

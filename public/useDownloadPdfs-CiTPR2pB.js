@@ -1,0 +1,1 @@
+import{Bt as e,Dt as t,Oi as n,zt as r}from"./forms-_xPIb7_B.js";function i({entity:i}){let a=n();return n=>{n.length&&(e.processing(),a.fetchQuery({queryKey:[`/api/v1/${i}s/bulk`],queryFn:()=>r(`POST`,t(`/api/v1/${i}s/bulk`),{action:`bulk_download`,ids:n}).then(t=>(e.success(`downloaded_entities`),t))}))}}export{i as t};

@@ -1,0 +1,152 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { AxiosError } from 'axios';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useColorScheme } from '$app/common/colors';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { route } from '$app/common/helpers/route';
+import { toast } from '$app/common/helpers/toast/toast';
+import { $refetch } from '$app/common/hooks/useRefetch';
+import { useTitle } from '$app/common/hooks/useTitle';
+import { BankAccount } from '$app/common/interfaces/bank-accounts';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { Card, Element } from '$app/components/cards';
+import { InputField } from '$app/components/forms';
+import Toggle from '$app/components/forms/Toggle';
+import { Settings } from '$app/components/layouts/Settings';
+import { ResourceActions } from '$app/components/ResourceActions';
+import { useBankAccountQuery } from '$app/pages/settings/bank-accounts/common/queries';
+import { useActions } from '../common/hooks/useActions';
+
+export function Edit() {
+  useTitle('edit_bank_account');
+
+  const [t] = useTranslation();
+
+  const actions = useActions();
+  const colors = useColorScheme();
+
+  const navigate = useNavigate();
+
+  const { id } = useParams<string>();
+
+  const { data: response } = useBankAccountQuery({ id });
+
+  const [errors, setErrors] = useState<ValidationBag>();
+  const [isFormBusy, setIsFormBusy] = useState<boolean>(false);
+  const [accountDetails, setAccountDetails] = useState<BankAccount>();
+
+  const pages = [
+    { name: t('settings'), href: '/settings' },
+    { name: t('bank_accounts'), href: '/settings/bank_accounts' },
+    {
+      name: t('edit_bank_account'),
+      href: route('/bank_accounts/:id/edit', { id }),
+    },
+  ];
+
+  const handleChange = (
+    property: keyof BankAccount,
+    value: BankAccount[keyof BankAccount]
+  ) => {
+    setAccountDetails(
+      (prevState) => prevState && { ...prevState, [property]: value }
+    );
+  };
+
+  const handleSave = async () => {
+    if (!isFormBusy) {
+      toast.processing();
+      setErrors(undefined);
+      setIsFormBusy(true);
+
+      request(
+        'PUT',
+        endpoint('/api/v1/bank_integrations/:id', { id }),
+        accountDetails
+      )
+        .then(() => {
+          toast.success('updated_bank_account');
+
+          $refetch(['bank_integrations']);
+
+          navigate('/settings/bank_accounts');
+        })
+        .catch((error: AxiosError<ValidationBag>) => {
+          if (error.response?.status === 422) {
+            setErrors(error.response.data);
+            toast.dismiss();
+          }
+        })
+        .finally(() => setIsFormBusy(false));
+    }
+  };
+
+  useEffect(() => {
+    if (response) {
+      setAccountDetails(response);
+    }
+  }, [response]);
+
+  return (
+    <Settings
+      title={t('edit_bank_account')}
+      breadcrumbs={pages}
+      docsLink="en/basic-settings/#edit_bank_account"
+      navigationTopRight={
+        accountDetails && (
+          <ResourceActions
+            resource={accountDetails}
+            onSaveClick={handleSave}
+            actions={actions}
+            disableSaveButton={!accountDetails || isFormBusy}
+          />
+        )
+      }
+    >
+      <Card
+        onFormSubmit={handleSave}
+        title={t('edit_bank_account')}
+        className="shadow-sm"
+        style={{ borderColor: colors.$24 }}
+        headerStyle={{ borderColor: colors.$20 }}
+        disableSubmitButton={isFormBusy}
+      >
+        <Element leftSide={t('account_name')}>
+          <InputField
+            value={accountDetails?.bank_account_name}
+            onValueChange={(value) => handleChange('bank_account_name', value)}
+            errorMessage={errors?.errors.bank_account_name}
+          />
+        </Element>
+
+        <Element leftSide={t('sync_from')}>
+          <InputField
+            type="date"
+            value={accountDetails?.from_date}
+            onValueChange={(value) => handleChange('from_date', value)}
+            errorMessage={errors?.errors.from_date}
+          />
+        </Element>
+
+        <Element leftSide={t('auto_sync')}>
+          <Toggle
+            checked={accountDetails?.auto_sync || false}
+            onValueChange={(value) => handleChange('auto_sync', value)}
+          />
+        </Element>
+      </Card>
+    </Settings>
+  );
+}

@@ -1,0 +1,51 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useOutletContext } from 'react-router-dom';
+import { Address } from '$app/pages/clients/edit/components/Address';
+import { Contacts } from '$app/pages/clients/edit/components/Contacts';
+import { Details } from '$app/pages/clients/edit/components/Details';
+import { ClientContext } from '$app/pages/clients/edit/Edit';
+
+export default function CreatePage() {
+  const context: ClientContext = useOutletContext();
+
+  const { client, setClient, errors, setErrors, contacts, setContacts } =
+    context;
+
+  return (
+    <div className="flex flex-col xl:flex-row space-y-4 xl:space-y-0 xl:gap-4">
+      <div className="w-full xl:w-1/2">
+        <Details
+          client={client}
+          setClient={setClient}
+          setErrors={setErrors}
+          errors={errors}
+        />
+      </div>
+
+      <div className="w-full xl:w-1/2 space-y-4">
+        <Contacts
+          contacts={contacts}
+          setContacts={setContacts}
+          setErrors={setErrors}
+          errors={errors}
+        />
+
+        <Address
+          client={client}
+          setClient={setClient}
+          setErrors={setErrors}
+          errors={errors}
+        />
+      </div>
+    </div>
+  );
+}

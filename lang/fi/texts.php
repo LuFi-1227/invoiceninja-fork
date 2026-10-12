@@ -3374,7 +3374,7 @@ Kun saat summat, palaa tälle maksutapasivulle ja klikkaa "Saata loppuun todenta
     'upstream_failure' => 'Ylävirran vika',
     'system_logs' => 'Järjestelmälokit',
     'copy_link' => 'Kopioi linkki',
-    'welcome_to_invoice_ninja' => 'Tervetuloa Invoice Ninja -palveluun',
+    'welcome_to_invoice_ninja' => 'Tervetuloa Gestoremio -palveluun',
     'optin' => 'Opt-In',
     'optout' => 'Opt-Out',
     'auto_convert' => 'Automaattinen muunnos',
