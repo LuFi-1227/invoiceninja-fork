@@ -1,0 +1,219 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import { useColorScheme } from '$app/common/colors';
+import { endpoint, isHosted } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useAccentColor } from '$app/common/hooks/useAccentColor';
+import { CompanyGateway } from '$app/common/interfaces/company-gateway';
+import { Gateway } from '$app/common/interfaces/statics';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { Element } from '$app/components/cards';
+import { Divider } from '$app/components/cards/Divider';
+import { Button, Link } from '$app/components/forms';
+import { Modal } from '$app/components/Modal';
+import { useHandleGoCardless } from '$app/pages/settings/gateways/create/hooks/useHandleGoCardless';
+import { useResolveConfigValue } from '$app/pages/settings/gateways/create/hooks/useResolveConfigValue';
+import { formatLabel } from '../helpers/format-label';
+import { useResolveInputField } from '../hooks/useResolveInputField';
+import { GoCardlessOAuth2 } from './gateways/GoCardlessOAuth2';
+import { PayPalPPCP } from './gateways/PayPalPPCP';
+import { Payware } from './gateways/Payware';
+import { SquareOAuth } from './gateways/SquareOAuth';
+import { StripeConnect } from './gateways/StripeConnect';
+import { WePay } from './gateways/WePay';
+
+interface Props {
+  gateway: Gateway;
+  companyGateway: CompanyGateway;
+  setCompanyGateway: React.Dispatch<
+    React.SetStateAction<CompanyGateway | undefined>
+  >;
+  errors: ValidationBag | undefined;
+  isGatewaySaved?: boolean;
+}
+
+export function Credentials(props: Props) {
+  const [t] = useTranslation();
+
+  const location = useLocation();
+  const colors = useColorScheme();
+  const accentColor = useAccentColor();
+
+  const handleGoCardless = useHandleGoCardless();
+  const resolveInputField = useResolveInputField(
+    props.companyGateway,
+    props.setCompanyGateway
+  );
+
+  const config = useResolveConfigValue(props.companyGateway);
+
+  const STRIPE_CONNECT = 'd14dd26a47cecc30fdd65700bfb67b34';
+  const WEPAY = '8fdeed552015b3c7b44ed6c8ebd9e992';
+  const PAYPAL_PPCP = '80af24a6a691230bbec33e930ab40666';
+  const GOCARDLESS = 'b9886f9257f0c6ee7c302f1c74475f6c';
+  const SQUARE = '65faab2ab6e3223dbe848b1686490baz';
+  const PAYWARE = 'b0a6294fca4488c2bab58f3e11e3c623';
+
+  const hostedGateways = [STRIPE_CONNECT, WEPAY, PAYPAL_PPCP, PAYWARE];
+
+  if (
+    isHosted() &&
+    props.gateway.key === GOCARDLESS &&
+    config('oauth2') === true
+  ) {
+    hostedGateways.push(GOCARDLESS);
+  }
+
+  if (isHosted() && props.gateway.key === SQUARE) {
+    hostedGateways.push(SQUARE);
+  }
+
+  const [isTestingBusy, setIsTestingBusy] = useState<boolean>(false);
+  const [testingMessage, setTestingMessage] = useState<string>('');
+  const [isTestingModalOpen, setIsTestingModalOpen] = useState<boolean>(false);
+
+  const handleTestCredentials = () => {
+    if (!isTestingBusy) {
+      toast.processing();
+      setIsTestingBusy(true);
+
+      request(
+        'POST',
+        endpoint('/api/v1/company_gateways/:id/test', {
+          id: props.companyGateway.id,
+        })
+      )
+        .then((response) => {
+          setIsTestingModalOpen(true);
+          setTestingMessage(response.data.message);
+        })
+        .finally(() => {
+          toast.dismiss();
+          setIsTestingBusy(false);
+        });
+    }
+  };
+
+  return (
+    <>
+      {props.gateway.site_url && props.gateway.site_url.length >= 1 && (
+        <Element leftSide={t('help')}>
+          <Link external to={props.gateway.site_url}>
+            {t('learn_more')}
+          </Link>
+        </Element>
+      )}
+
+      {props.gateway && props.gateway.key === STRIPE_CONNECT && (
+        <StripeConnect />
+      )}
+
+      {props.gateway && props.gateway.key === WEPAY && <WePay />}
+
+      {props.gateway && props.gateway.key === PAYPAL_PPCP && (
+        <PayPalPPCP
+          gateway={props.gateway}
+          companyGateway={props.companyGateway}
+          setCompanyGateway={props.setCompanyGateway}
+          errors={props.errors}
+        />
+      )}
+
+      {props.gateway && props.gateway.key === PAYWARE && (
+        <Payware
+          gateway={props.gateway}
+          companyGateway={props.companyGateway}
+          setCompanyGateway={props.setCompanyGateway}
+          errors={props.errors}
+        />
+      )}
+
+      {props.gateway &&
+        props.gateway.key === GOCARDLESS &&
+        isHosted() &&
+        config('oauth2') === true && <GoCardlessOAuth2 />}
+
+      {props.gateway && props.gateway.key === SQUARE && isHosted() && (
+        <SquareOAuth companyGateway={props.companyGateway} />
+      )}
+
+      {props.gateway &&
+        !hostedGateways.includes(props.gateway.key) &&
+        Object.keys(JSON.parse(props.gateway.fields)).map((field, index) => (
+          <Element leftSide={formatLabel(field)} key={index}>
+            {resolveInputField(
+              field,
+              JSON.parse(props.gateway.fields)[field],
+              props.errors
+            )}
+          </Element>
+        ))}
+
+      {props.gateway &&
+        props.gateway.key === GOCARDLESS &&
+        isHosted() &&
+        config('oauth2') !== true && (
+          <Element leftSide={t('OAuth 2.0')}>
+            <Button behavior="button" type="minimal" onClick={handleGoCardless}>
+              {t('connect')}
+            </Button>
+          </Element>
+        )}
+
+      {!location.pathname.includes('/create') && (
+        <>
+          <div className="px-4 sm:px-6 pt-2 pb-4">
+            <Divider
+              className="border-dashed"
+              withoutPadding
+              borderColor={colors.$20}
+            />
+          </div>
+
+          <div className="flex flex-col items-end justify-end pr-6">
+            <Button
+              behavior="button"
+              onClick={handleTestCredentials}
+              disableWithoutIcon
+              disabled={isTestingBusy || !props.isGatewaySaved}
+            >
+              {t('health_check')}
+            </Button>
+
+            {!props.isGatewaySaved ? (
+              <p className="mt-2 text-sm font-medium">
+                {t('save_to_enable_health_check')}
+              </p>
+            ) : null}
+          </div>
+        </>
+      )}
+
+      <Modal
+        title={t('status')}
+        visible={isTestingModalOpen}
+        onClose={() => setIsTestingModalOpen(false)}
+      >
+        <span className="text-center font-medium text-base pb-3">
+          {t(
+            testingMessage && testingMessage !== 'false'
+              ? testingMessage
+              : 'status_failed'
+          )}
+        </span>
+      </Modal>
+    </>
+  );
+}

@@ -1,0 +1,195 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useEffect, useState } from 'react';
+import { BsBox } from 'react-icons/bs';
+import { useNavigate } from 'react-router-dom';
+import { useColorScheme } from '$app/common/colors';
+import { route } from '$app/common/helpers/route';
+import { useFormatMoney } from '$app/common/hooks/money/useFormatMoney';
+import { useAccentColor } from '$app/common/hooks/useAccentColor';
+import { Product } from '$app/common/interfaces/product';
+import { Subscription } from '$app/common/interfaces/subscription';
+import { Link, SelectField } from '$app/components/forms';
+import { CircleXMark } from '$app/components/icons/CircleXMark';
+
+interface Props {
+  type:
+    | 'product_ids'
+    | 'recurring_product_ids'
+    | 'optional_product_ids'
+    | 'optional_recurring_product_ids';
+  subscription: Subscription;
+  handleChange: (
+    property: keyof Subscription,
+    value: Subscription[keyof Subscription]
+  ) => void;
+  products: Product[] | undefined;
+}
+
+export function MultipleProductSelector(props: Props) {
+  const colors = useColorScheme();
+  const accentColor = useAccentColor();
+
+  const navigate = useNavigate();
+
+  const formatMoney = useFormatMoney();
+
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
+
+  const [selectedProductId, setSelectedProductId] = useState<string>();
+
+  const handleRemoveProduct = (productId: string) => {
+    const productIndex = selectedProducts.findIndex(
+      ({ id }) => id === productId
+    );
+
+    if (productIndex > -1) {
+      const updatedSelectedProducts = selectedProducts.filter(
+        (_, index) => index !== productIndex
+      );
+
+      setSelectedProducts(updatedSelectedProducts);
+
+      const productIdsList = updatedSelectedProducts.map(({ id }) => id);
+
+      props.handleChange(props.type, productIdsList.join(','));
+    }
+  };
+
+  const getOptionLabelText = (product: Product) => {
+    return (
+      product.product_key +
+      ' ' +
+      formatMoney(
+        product.price,
+        product.company?.settings.country_id,
+        product.company?.settings.currency_id
+      ).toString()
+    );
+  };
+
+  useEffect(() => {
+    if (props.products) {
+      let filteredProducts: Product[] = [];
+
+      props.subscription[props.type].split(',').forEach((productId) => {
+        filteredProducts = filteredProducts.concat(
+          props.products?.filter(({ id }) => id === productId) || []
+        );
+      });
+
+      setSelectedProducts(filteredProducts);
+    }
+  }, [props.products]);
+
+  useEffect(() => {
+    if (props.products && selectedProductId) {
+      const selectedProduct = props.products.filter(
+        ({ id }) => selectedProductId === id
+      );
+
+      setSelectedProducts((prevState) => [...prevState, ...selectedProduct]);
+
+      setSelectedProductId('');
+    }
+  }, [selectedProductId]);
+
+  useEffect(() => {
+    if (props.products) {
+      const productIdsList = selectedProducts.map(({ id }) => id);
+
+      props.handleChange(props.type, productIdsList.join(','));
+    }
+  }, [selectedProducts]);
+
+  return (
+    <>
+      {props.products && (
+        <SelectField
+          value={selectedProductId}
+          onValueChange={(value) => setSelectedProductId(value)}
+          withBlank
+          customSelector
+        >
+          {props.products.map((product, index) => (
+            <option key={index} value={product.id}>
+              {getOptionLabelText(product)}
+            </option>
+          ))}
+        </SelectField>
+      )}
+
+      <div className="flex justify-center">
+        <ul role="list" className="-mb-8 mt-3">
+          {selectedProducts.map((product, index) => (
+            <li key={index}>
+              <div className="relative pb-8">
+                {index !== selectedProducts.length - 1 && (
+                  <span
+                    className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200"
+                    aria-hidden="true"
+                  />
+                )}
+                <div className="relative flex space-x-3">
+                  <span
+                    className="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    <BsBox
+                      className="h-4 w-4 text-white cursor-pointer"
+                      aria-hidden="true"
+                      onClick={() =>
+                        navigate(
+                          route(`/products/:id/edit`, { id: product.id })
+                        )
+                      }
+                    />
+                  </span>
+
+                  <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                    <div className="flex items-center flex-1 justify-between space-x-5">
+                      <Link
+                        to={route(`/products/:id/edit`, { id: product.id })}
+                      >
+                        {product.product_key}
+                      </Link>
+
+                      <span className="font-mono">
+                        {formatMoney(
+                          product.price,
+                          product.company?.settings.country_id,
+                          product.company?.settings.currency_id
+                        )}
+                      </span>
+                    </div>
+
+                    <div
+                      className="whitespace-nowrap text-right cursor-pointer"
+                      onClick={() => handleRemoveProduct(product.id)}
+                    >
+                      <CircleXMark
+                        color={colors.$16}
+                        hoverColor={colors.$3}
+                        borderColor={colors.$5}
+                        hoverBorderColor={colors.$17}
+                        size="1.4rem"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}

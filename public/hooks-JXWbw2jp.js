@@ -1,0 +1,1 @@
+import{ai as e}from"./forms-_xPIb7_B.js";import{s as t}from"./enterprise-plan-Dg3wp6nD.js";function n(){let n=e();return(e,r)=>{n(t({object:`company`,property:`settings.${e}`,value:r}))}}export{n as t};

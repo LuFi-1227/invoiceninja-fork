@@ -4,6 +4,7 @@ namespace Tests\Feature\WhatsApp;
 
 use App\Models\CompanyGateway;
 use App\Models\PaymentHash;
+use App\PaymentDrivers\Asaas\AsaasApi;
 use App\Services\Asaas\AsaasBoletoService;
 use App\Services\WhatsApp\Drivers\EvolutionApiDriver;
 use App\Services\WhatsApp\WhatsAppService;
@@ -122,6 +123,32 @@ class AsaasBoletoTest extends TestCase
         });
 
         $this->assertSame(1, $paymentPosts);
+    }
+
+    public function test_client_asaas_id_is_persisted_and_reused(): void
+    {
+        $this->fakeAsaas();
+
+        $this->assertEmpty($this->client->fresh()->asaas_id);
+
+        $api = new AsaasApi('asaas-test-key');
+
+        $this->assertSame('cus_123', $api->createOrUpdateCustomer($this->client->fresh()));
+        $this->assertSame('cus_123', $this->client->fresh()->asaas_id);
+
+        // A subsequent call must reuse the stored id and never POST a new customer.
+        $this->assertSame('cus_123', $api->createOrUpdateCustomer($this->client->fresh()));
+
+        $customerPosts = 0;
+        Http::assertSent(function ($request) use (&$customerPosts) {
+            if ($request->method() === 'POST' && str_contains($request->url(), '/customers')) {
+                $customerPosts++;
+            }
+
+            return true;
+        });
+
+        $this->assertSame(1, $customerPosts);
     }
 
     public function test_whatsapp_sends_invoice_text_and_boleto_document(): void

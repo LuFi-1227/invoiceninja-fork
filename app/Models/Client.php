@@ -86,6 +86,7 @@ use Laracasts\Presenter\PresentableTrait;
  * @property int|null $updated_at
  * @property int|null $deleted_at
  * @property string|null $id_number
+ * @property string|null $asaas_id
  * @property string|null $classification
  * @property-read mixed $hashed_id
  * @property-read \App\Models\User|null $assigned_user
@@ -159,6 +160,7 @@ class Client extends BaseModel implements HasLocalePreference
         'user_id',
         'company_id',
         'last_login',
+        'asaas_id',
     ];
 
     protected $fillable = [

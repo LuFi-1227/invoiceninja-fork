@@ -1,0 +1,181 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTitle } from '$app/common/hooks/useTitle';
+import { Page } from '$app/components/Breadcrumbs';
+import { DataTable } from '$app/components/DataTable';
+import { Default } from '$app/components/layouts/Default';
+import { useTranslation } from 'react-i18next';
+import {
+  defaultColumns,
+  useAllClientColumns,
+  useClientColumns,
+} from '../common/hooks/useClientColumns';
+import {
+  useEntityTagFilterColumns,
+  useTagFilterCleanup,
+} from '$app/common/hooks/useEntityTagFilters';
+import { TAG_ENTITY_TYPES } from '$app/common/interfaces/tag';
+import { DataTableColumnsPicker } from '$app/components/DataTableColumnsPicker';
+import { ImportButton } from '$app/components/import/ImportButton';
+import { useActions } from '../common/hooks/useActions';
+import { Guard } from '$app/common/guards/Guard';
+import { or } from '$app/common/guards/guards/or';
+import { permission } from '$app/common/guards/guards/permission';
+import { useCustomBulkActions } from '../common/hooks/useCustomBulkActions';
+import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
+import {
+  ChangeTemplateModal,
+  useChangeTemplate,
+} from '$app/pages/settings/invoice-design/pages/custom-designs/components/ChangeTemplate';
+import { Client } from '$app/common/interfaces/client';
+import { InputLabel } from '$app/components/forms';
+import { useReactSettings } from '$app/common/hooks/useReactSettings';
+import { useEffect, useState } from 'react';
+import { useAtom } from 'jotai';
+import { useClientQuery } from '$app/common/queries/clients';
+import { useDisableNavigation } from '$app/common/hooks/useDisableNavigation';
+import {
+  ClientSlider,
+  clientSliderAtom,
+  clientSliderVisibilityAtom,
+} from '../common/components/ClientSlider';
+
+export default function Clients() {
+  useTitle('clients');
+
+  const [t] = useTranslation();
+  const hasPermission = useHasPermission();
+  const disableNavigation = useDisableNavigation();
+
+  const pages: Page[] = [{ name: t('clients'), href: '/clients' }];
+
+  const actions = useActions();
+  const columns = useClientColumns();
+  const reactSettings = useReactSettings();
+  const clientColumns = useAllClientColumns();
+  const customBulkActions = useCustomBulkActions();
+
+  const selectedColumns =
+    reactSettings?.react_table_columns?.client || defaultColumns;
+  const shouldShowTagFilter = selectedColumns.includes('tags');
+  const filterColumns = useEntityTagFilterColumns(
+    TAG_ENTITY_TYPES.client,
+    'client_tag_ids',
+    { enabled: shouldShowTagFilter }
+  );
+
+  useTagFilterCleanup(shouldShowTagFilter, 'client_tag_ids');
+
+  const [sliderClientId, setSliderClientId] = useState<string>('');
+  const [clientSlider, setClientSlider] = useAtom(clientSliderAtom);
+  const [clientSliderVisibility, setClientSliderVisibility] = useAtom(
+    clientSliderVisibilityAtom
+  );
+
+  const { data: clientResponse } = useClientQuery({
+    id: sliderClientId,
+    enabled: Boolean(sliderClientId),
+  });
+
+  useEffect(() => {
+    if (sliderClientId) {
+      setClientSlider(null);
+    }
+  }, [sliderClientId]);
+
+  useEffect(() => {
+    if (clientResponse && clientSliderVisibility) {
+      setClientSlider(clientResponse);
+    }
+  }, [clientResponse, clientSliderVisibility]);
+
+  useEffect(() => {
+    return () => setClientSliderVisibility(false);
+  }, []);
+
+  const {
+    changeTemplateVisible,
+    setChangeTemplateVisible,
+    changeTemplateResources,
+  } = useChangeTemplate();
+
+  return (
+    <Default breadcrumbs={pages} title={t('clients')} docsLink="en/clients">
+      <DataTable
+        resource="client"
+        endpoint={`/api/v1/clients?include=group_settings${
+          shouldShowTagFilter ? ',tags' : ''
+        }&sort=id|desc${shouldShowTagFilter ? '' : '&tag_ids='}`}
+        bulkRoute="/api/v1/clients/bulk"
+        columns={columns}
+        linkToCreate="/clients/create"
+        linkToEdit="/clients/:id/edit"
+        withResourcefulActions
+        customActions={actions}
+        bottomActionsKeys={['purge']}
+        customBulkActions={customBulkActions}
+        filterColumns={shouldShowTagFilter ? filterColumns : undefined}
+        rightSide={
+          <div className="flex items-center space-x-2">
+            <DataTableColumnsPicker
+              table="client"
+              columns={clientColumns as unknown as string[]}
+              defaultColumns={defaultColumns}
+            />
+
+            <Guard
+              type="component"
+              guards={[
+                or(permission('create_client'), permission('edit_client')),
+              ]}
+              component={<ImportButton route="/clients/import" />}
+            />
+          </div>
+        }
+        linkToCreateGuards={[permission('create_client')]}
+        hideEditableOptions={!hasPermission('edit_client')}
+        onTableRowClick={(client) => {
+          setSliderClientId(client.id);
+          setClientSliderVisibility(true);
+        }}
+        enableSavingFilterPreference
+        dateRangeColumns={[
+          { column: 'created_at', queryParameterKey: 'created_between' },
+        ]}
+        enableSavingLatestDataForNavigation
+      />
+
+      {!disableNavigation('client', clientSlider) && <ClientSlider />}
+
+      <ChangeTemplateModal<Client>
+        entity="client"
+        entities={changeTemplateResources as Client[]}
+        visible={changeTemplateVisible}
+        setVisible={setChangeTemplateVisible}
+        labelFn={(client) => (
+          <div className="flex flex-col space-y-1">
+            <InputLabel>{t('number')}</InputLabel>
+
+            <span>{client.number}</span>
+          </div>
+        )}
+        bulkLabelFn={(client) => (
+          <div className="flex space-x-2">
+            <InputLabel>{t('number')}:</InputLabel>
+
+            <span>{client.number}</span>
+          </div>
+        )}
+        bulkUrl="/api/v1/clients/bulk"
+      />
+    </Default>
+  );
+}

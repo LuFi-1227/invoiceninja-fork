@@ -1,0 +1,264 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { AxiosError } from 'axios';
+import { useEffect, useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { useTranslation } from 'react-i18next';
+import { MdClose } from 'react-icons/md';
+import styled from 'styled-components';
+import { useColorScheme } from '$app/common/colors';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { toast } from '$app/common/helpers/toast/toast';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { Element } from '$app/components/cards';
+import { ErrorMessage } from '../ErrorMessage';
+import { Button } from '../forms';
+import { CloudUpload } from '../icons/CloudUpload';
+import { Icon } from '../icons/Icon';
+
+interface Props {
+  entity: 'expense';
+  type: 'xml';
+}
+
+const Div = styled.div`
+  border-color: ${(props) => props.theme.borderColor};
+  &:hover {
+    border-color: ${(props) => props.theme.hoverBorderColor};
+  }
+`;
+
+function isAcceptedXmlFile(file: File): boolean {
+  if (file.name.toLowerCase().endsWith('.xml')) {
+    return true;
+  }
+
+  const raw = file.type.toLowerCase();
+  const mime = raw.split(';')[0]?.trim() ?? '';
+
+  return (
+    mime.startsWith('application/xml') ||
+    mime.startsWith('text/xml') ||
+    mime.endsWith('+xml')
+  );
+}
+
+function isWellFormedXml(file: File): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+
+      reader.onload = (event: ProgressEvent<FileReader>) => {
+        const text = (event.target?.result as string) ?? '';
+
+        if (!text.trim()) {
+          resolve(false);
+          return;
+        }
+
+        const doc = new DOMParser().parseFromString(text, 'application/xml');
+
+        resolve(doc.getElementsByTagName('parsererror').length === 0);
+      };
+
+      reader.onerror = () => resolve(false);
+
+      reader.readAsText(file);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+export function XMLImport(props: Props) {
+  const [t] = useTranslation();
+
+  const { entity } = props;
+
+  const colors = useColorScheme();
+
+  const [files, setFiles] = useState<File[]>([]);
+  const [errors, setErrors] = useState<ValidationBag>();
+  const [formData, setFormData] = useState(new FormData());
+  const [isFormBusy, setIsFormBusy] = useState<boolean>(false);
+
+  const handleImport = () => {
+    if (!isFormBusy) {
+      if (!files.length) {
+        toast.error('select_file');
+        return;
+      }
+
+      toast.processing();
+      setIsFormBusy(true);
+      setErrors(undefined);
+
+      return request('POST', endpoint('/api/v1/edocument/upload'), formData)
+        .then((response) => {
+          toast.success(response?.data?.message ?? 'success');
+        })
+        .catch((error: AxiosError<ValidationBag>) => {
+          if (error.response?.status === 422) {
+            toast.dismiss();
+            setErrors(error.response.data);
+          }
+        })
+        .finally(() => {
+          setFiles([]);
+          setIsFormBusy(false);
+          setFormData(new FormData());
+        });
+    }
+  };
+
+  const addFilesToFormData = () => {
+    files.forEach((file) => {
+      formData.append(`documents[]`, file);
+    });
+
+    setFormData(formData);
+  };
+
+  const handleRemoveFile = (fileIndex: number) => {
+    const filteredFileList = files.filter((_, index) => fileIndex !== index);
+
+    const updatedFormData = new FormData();
+
+    updatedFormData.append('import_type', entity);
+
+    updatedFormData.append('_method', 'PUT');
+
+    setFiles(filteredFileList);
+
+    setFormData(updatedFormData);
+  };
+
+  const shouldUploadFiles = async (files: File[]) => {
+    for (let i = 0; i < files.length; i++) {
+      const ok = await isWellFormedXml(files[i]);
+
+      if (!ok) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: { 'application/xml': ['.xml'] },
+    onDrop: async (acceptedFiles) => {
+      const shouldAddFiles = await shouldUploadFiles(acceptedFiles);
+
+      if (shouldAddFiles) {
+        const isFilesTypeCorrect = acceptedFiles.every(isAcceptedXmlFile);
+
+        if (isFilesTypeCorrect) {
+          setFiles([...acceptedFiles]);
+
+          formData.append('import_type', entity);
+
+          formData.append('_method', 'PUT');
+
+          setFormData(formData);
+        } else {
+          toast.error('wrong_file_extension');
+        }
+      } else {
+        toast.error('invalid_file');
+      }
+    },
+  });
+
+  useEffect(() => {
+    addFilesToFormData();
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      setFiles([]);
+      setFormData(new FormData());
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col space-y-4">
+      <Element leftSide={t('xml_file')}>
+        {!files.length ? (
+          <div
+            {...getRootProps()}
+            className="flex flex-col md:flex-row md:items-center"
+          >
+            <Div
+              className="relative block w-full border-2 border-dashed rounded-lg p-12 text-center"
+              theme={{
+                borderColor: colors.$21,
+                hoverBorderColor: colors.$17,
+              }}
+            >
+              <input {...getInputProps()} />
+
+              <div className="flex justify-center">
+                <CloudUpload size="2.3rem" color={colors.$3} />
+              </div>
+
+              <span
+                className="mt-2 block text-sm font-medium"
+                style={{ color: colors.$3, colorScheme: colors.$0 }}
+              >
+                {isDragActive
+                  ? t('drop_file_here')
+                  : t('dropzone_default_message')}
+              </span>
+            </Div>
+
+            {errors &&
+              Object.keys(errors.errors).map((key, index) => (
+                <ErrorMessage key={index}>{errors.errors[key]}</ErrorMessage>
+              ))}
+          </div>
+        ) : (
+          <ul className="grid xs:grid-rows-6 lg:grid-cols-2 gap-3">
+            {files.map((file, index) => (
+              <li
+                key={index}
+                className="flex items-center justify-between cursor-pointer p-2"
+                style={{ backgroundColor: colors.$4 }}
+              >
+                {file.name} - {(file.size / 1024).toPrecision(2)} KB{' '}
+                {
+                  <Icon
+                    element={MdClose}
+                    size={19}
+                    className="cursor-pointer"
+                    onClick={() => handleRemoveFile(index)}
+                  />
+                }
+              </li>
+            ))}
+          </ul>
+        )}
+      </Element>
+
+      <div className="flex justify-end pr-5">
+        <Button
+          behavior="button"
+          onClick={handleImport}
+          disableWithoutIcon
+          disabled={!files.length || isFormBusy}
+        >
+          {t('import')}
+        </Button>
+      </div>
+    </div>
+  );
+}

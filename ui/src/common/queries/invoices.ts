@@ -1,0 +1,151 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosResponse } from 'axios';
+import { useAtomValue } from 'jotai';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import { Invoice } from '$app/common/interfaces/invoice';
+import { EmailType } from '$app/pages/invoices/common/components/SendEmailModal';
+import { invalidationQueryAtom } from '../atoms/data-table';
+import { toast } from '../helpers/toast/toast';
+import { $refetch } from '../hooks/useRefetch';
+import { resolveBlankQueryEnabled } from './blank-query-options';
+
+export interface GenericQueryOptions {
+  id?: string;
+  with?: string[];
+  enabled?: boolean;
+}
+
+interface InvoiceQueryParams {
+  id: string | undefined;
+  includeIsLocked?: boolean;
+}
+
+export function useInvoiceQuery(params: InvoiceQueryParams) {
+  const { includeIsLocked } = params;
+
+  const isLockedParam = includeIsLocked ? '&is_locked=true' : '';
+
+  return useQuery({
+    queryKey: ['/api/v1/invoices', 'detail', params.id],
+
+    queryFn: () =>
+      request(
+        'GET',
+        endpoint(
+          `/api/v1/invoices/:id?include=paymentables,payments,client.group_settings&show_schedule=true${isLockedParam}`,
+          {
+            id: params.id,
+          }
+        )
+      ).then(
+        (response: GenericSingleResourceResponse<Invoice>) => response.data.data
+      ),
+
+    staleTime: Infinity,
+    enabled: Boolean(params.id),
+  });
+}
+
+export function useBlankInvoiceQuery(options?: GenericQueryOptions) {
+  const hasPermission = useHasPermission();
+
+  return useQuery({
+    queryKey: ['/api/v1/invoices/create'],
+
+    queryFn: () =>
+      request('GET', endpoint('/api/v1/invoices/create')).then(
+        (response: GenericSingleResourceResponse<Invoice>) => response.data.data
+      ),
+
+    staleTime: Infinity,
+
+    enabled: resolveBlankQueryEnabled(
+      options,
+      hasPermission('create_invoice')
+    ),
+  });
+}
+
+export function bulk(
+  id: string[],
+  action: 'archive' | 'restore' | 'delete' | 'cancel'
+): Promise<AxiosResponse> {
+  return request('POST', endpoint('/api/v1/invoices/bulk'), {
+    action,
+    ids: Array.from(id),
+  });
+}
+
+const successMessages = {
+  mark_sent: 'marked_sent_invoices',
+  email: 'emailed_invoices',
+  mark_paid: 'marked_invoices_as_paid',
+  download: 'exported_data',
+  cancel: 'cancelled_invoices',
+  auto_bill: 'auto_billed_invoices',
+};
+
+interface Params {
+  onSuccess?: () => void;
+}
+
+export function useBulk(params?: Params) {
+  const queryClient = useQueryClient();
+  const invalidateQueryValue = useAtomValue(invalidationQueryAtom);
+
+  return (
+    ids: string[],
+    action:
+      | 'archive'
+      | 'restore'
+      | 'delete'
+      | 'email'
+      | 'mark_sent'
+      | 'mark_paid'
+      | 'download'
+      | 'cancel'
+      | 'auto_bill'
+      | 'delete',
+    emailType?: EmailType,
+    additionalParams?: Record<string, unknown>
+  ) => {
+    toast.processing();
+
+    request('POST', endpoint('/api/v1/invoices/bulk'), {
+      action,
+      ids,
+      ...(emailType && { email_type: emailType }),
+      ...additionalParams,
+    }).then(() => {
+      const message =
+        successMessages[action as keyof typeof successMessages] ||
+        `${action}d_invoice`;
+
+      toast.success(message);
+
+      params?.onSuccess?.();
+
+      if (action !== 'auto_bill') {
+        $refetch(['invoices']);
+      }
+
+      invalidateQueryValue &&
+        queryClient.invalidateQueries({
+          queryKey: [invalidateQueryValue],
+        });
+    });
+  };
+}

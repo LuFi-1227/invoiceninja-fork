@@ -1,0 +1,69 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTranslation } from 'react-i18next';
+import { isDemo, isHosted } from '$app/common/helpers';
+import { useAdmin } from '$app/common/hooks/permissions/useHasPermission';
+import { Tab } from '$app/components/Tabs';
+
+export function useAccountManagementTabs() {
+  const [t] = useTranslation();
+  const { isOwner } = useAdmin();
+
+  let tabs: Tab[] = [
+    { name: t('plan'), href: '/settings/account_management' },
+    { name: t('overview'), href: '/settings/account_management/overview' },
+    
+    {
+      name: t('enabled_modules'),
+      href: '/settings/account_management/enabled_modules',
+    },
+    {
+      name: t('integrations'),
+      href: '/settings/account_management/integrations',
+    },
+    {
+      name: t('security_settings'),
+      href: '/settings/account_management/security_settings',
+    },
+  ];
+
+  tabs = isHosted() || import.meta.env.VITE_ENABLE_NEW_ACCOUNT_MANAGEMENT === 'true'
+    ? [
+        ...tabs,
+        {
+          name: t('referral_program'),
+          href: '/settings/account_management/referral_program',
+        },
+        {
+          name: t('users'),
+          href: '/settings/account_management/users',
+          enabled: isOwner,
+        },
+        {
+          name: 'Billing History',
+          href: '/settings/account_management/billing_history',
+          enabled: isOwner,
+        },
+      ]
+    : tabs;
+
+  const updatedTabsList = !isDemo()
+    ? [
+        ...tabs,
+        {
+          name: t('danger_zone'),
+          href: '/settings/account_management/danger_zone',
+        },
+      ]
+    : tabs;
+
+  return updatedTabsList;
+}

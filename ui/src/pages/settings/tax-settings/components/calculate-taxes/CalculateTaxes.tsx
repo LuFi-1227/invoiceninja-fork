@@ -1,0 +1,31 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { AndorraRegions } from './components/AndorraRegions';
+import { AURegions } from './components/AURegions';
+import { EURegions } from './components/EURegions';
+import { SellerSubregion } from './components/SellerSubregion';
+import { SGRegions } from './components/SGRegions';
+import { UKRegions } from './components/UKRegions';
+import { USRegions } from './components/USRegions';
+
+export function CalculateTaxes() {
+  return (
+    <>
+      <SellerSubregion />
+      <USRegions />
+      <EURegions />
+      <UKRegions />
+      <AURegions />
+      <AndorraRegions />
+      <SGRegions />
+    </>
+  );
+}

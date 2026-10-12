@@ -1,0 +1,830 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2024. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { AxiosError, AxiosResponse } from 'axios';
+import classNames from 'classnames';
+import { useFormik } from 'formik';
+import { get } from 'lodash';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check } from 'react-feather';
+import { useTranslation } from 'react-i18next';
+import { useColorScheme } from '$app/common/colors';
+import { endpoint, isHosted, isSelfHosted } from '$app/common/helpers';
+import { Classification } from '$app/common/helpers/peppol-countries';
+import { request } from '$app/common/helpers/request';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useAccentColor } from '$app/common/hooks/useAccentColor';
+import { useCurrentAccount } from '$app/common/hooks/useCurrentAccount';
+import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
+import { useCurrentUser } from '$app/common/hooks/useCurrentUser';
+import { useIsWhitelabelled } from '$app/common/hooks/usePaidOrSelfhost';
+import { useRefreshCompanyUsers } from '$app/common/hooks/useRefreshCompanyUsers';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { CountrySelector } from '$app/components/CountrySelector';
+import { Element } from '$app/components/cards';
+import { ErrorMessage } from '$app/components/ErrorMessage';
+import { Button, InputField, Link } from '$app/components/forms';
+import Toggle from '$app/components/forms/Toggle';
+import { Modal } from '$app/components/Modal';
+import { Spinner } from '$app/components/Spinner';
+
+export type Step =
+  | 'plan_check'
+  | 'token'
+  | 'vat_check'
+  | 'buy_credits'
+  | 'form'
+  | 'completed';
+
+const translations: Record<Step, string> = {
+  plan_check: 'plan',
+  token: 'token',
+  vat_check: 'vat',
+  buy_credits: 'credits',
+  form: 'form',
+  completed: 'completed',
+};
+
+const defaultSteps: Step[] = [
+  'plan_check',
+  'token',
+  'vat_check',
+  'buy_credits',
+  'form',
+  'completed',
+];
+
+export function Onboarding() {
+  const accentColor = useAccentColor();
+
+  const { t } = useTranslation();
+  const account = useCurrentAccount();
+  const company = useCurrentCompany();
+
+  const isSingapore = company?.settings?.country_id === '702';
+  const hasEInvoiceCredits = Number(account?.e_invoice_quota) > 0;
+
+  const [isVisible, setIsVisible] = useState(false);
+  const [step, setStep] = useState<Step>('plan_check');
+  const [businessType, setBusinessType] = useState<Classification>();
+
+  const steps = defaultSteps.filter(
+    (step) =>
+      !(isHosted() && step === 'token') &&
+      !(hasEInvoiceCredits && step === 'buy_credits')
+  );
+
+  useEffect(() => {
+    if (step === 'completed') {
+      setIsVisible(false);
+
+      toast.success(t('peppol_successfully_configured')!);
+    }
+  }, [step]);
+
+  const next = () => {
+    const next = steps[steps.indexOf(step) + 1];
+
+    if (next) {
+      setStep(next);
+    }
+  };
+
+  useEffect(() => {
+    if (!isVisible) {
+      setStep('plan_check');
+    }
+  }, [isVisible]);
+
+  return (
+    <>
+      <Element>
+        <div className="space-x-1">
+          <span>{t('peppol_onboarding')}</span>
+          <button
+            style={{ color: accentColor }}
+            type="button"
+            onClick={() => {
+              setStep('plan_check');
+              setIsVisible(true);
+            }}
+          >
+            {t('get_started')}
+          </button>
+        </div>
+      </Element>
+
+      <Modal
+        visible={isVisible}
+        onClose={() => setIsVisible(false)}
+        title={t('configure_peppol')}
+        size="regular"
+      >
+        <div className="">
+          <div className="max-w-xl mx-auto space-y-10">
+            <ol className="lg:flex items-center w-full space-y-4 lg:space-x-8 lg:space-y-0">
+              {steps
+                .filter((s) => !['token', 'completed'].includes(s))
+                .map((s, i) => (
+                  <li className="flex-1" key={i}>
+                    <a
+                      className="border-l-2 flex flex-col border-t-0 pl-4 pt-0 border-solid font-medium lg:pt-4 lg:border-t-2 lg:border-l-0 lg:pl-0"
+                      style={{
+                        borderColor: step === s ? accentColor : '',
+                      }}
+                    >
+                      <span
+                        className="text-sm"
+                        style={{
+                          color: step === s ? accentColor : '',
+                        }}
+                      >
+                        {t('step')} {i + 1}
+                      </span>
+                      <h4 className="text-base lg:text-lg text-gray-900">
+                        {s === 'vat_check' && isSingapore
+                          ? t('classification')
+                          : t(translations[s])}
+                      </h4>
+                    </a>
+                  </li>
+                ))}
+            </ol>
+
+            {step === 'plan_check' ? (
+              <PlanCheck step={step} onContinue={next} />
+            ) : null}
+
+            {step === 'token' ? <Token step={step} onContinue={next} /> : null}
+
+            {step === 'vat_check' ? (
+              <VatCheck
+                businessType={businessType}
+                setBusinessType={setBusinessType}
+                onContinue={next}
+                step={step}
+                isSingapore={isSingapore}
+              />
+            ) : null}
+
+            {step === 'buy_credits' ? (
+              <BuyCredits step={step} onContinue={next} />
+            ) : null}
+
+            {step === 'form' ? (
+              <Form
+                step={step}
+                onContinue={next}
+                businessType={businessType!}
+                isSingapore={isSingapore}
+              />
+            ) : null}
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+interface StepProps {
+  step: Step;
+  onContinue: () => void;
+}
+
+function PlanCheck({ onContinue }: StepProps) {
+  const account = useCurrentAccount();
+  const isWhitelabelled = useIsWhitelabelled();
+  const accentColor = useAccentColor();
+
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    if (isHosted() && account?.plan === 'enterprise') {
+      onContinue();
+
+      return;
+    }
+  }, [account?.plan, isWhitelabelled]);
+
+  const form = useFormik({
+    initialValues: {},
+    onSubmit(_, { setSubmitting }) {
+      request('POST', endpoint('/api/v1/check_license'), undefined, {
+        skipIntercept: true,
+      })
+        .then(() => {
+          onContinue();
+        })
+        .catch((e: AxiosError<ValidationBag>) => {
+          if (e.response?.status === 422) {
+            toast.error(e.response.data.message);
+
+            return;
+          }
+
+          console.error(e);
+
+          toast.error(t('invalid_white_label_license')!);
+        })
+        .finally(() => setSubmitting(false));
+    },
+  });
+
+  const buyWhitelabelUrl =
+    import.meta.env.VITE_WHITELABEL_INVOICE_URL ||
+    'https://invoiceninja.invoicing.co/client/subscriptions/O5xe7Rwd7r/purchase';
+
+  return (
+    <div className="space-y-5">
+      <p className="text-lg">{isSelfHosted() ? t('license') : t('plan')}</p>
+
+      {isSelfHosted() ? (
+        <div>
+          {t('peppol_whitelabel_warning')} <br /> <br />
+          {t('add_license_to_env')}
+          &nbsp;
+          <a
+            href="https://invoiceninja.github.io/docs/self-host/env-variables/"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: accentColor }}
+          >
+            {t('learn_more')}
+          </a>
+          <form
+            className="mt-4"
+            id="checkLicenseForm"
+            onSubmit={form.handleSubmit}
+          ></form>
+          {!isWhitelabelled ? (
+            <div className="mt-2">
+              <Link to={buyWhitelabelUrl} external>
+                {t('purchase_license')}
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isHosted() ? (
+        <div>
+          {t('peppol_plan_warning')} <br />
+          <Link to="/settings/account_management">
+            {t('pro_plan_call_to_action')}
+          </Link>
+        </div>
+      ) : null}
+
+      <div className="flex justify-end">
+        <Button
+          form="checkLicenseForm"
+          type="primary"
+          onClick={form.submitForm}
+          disabled={form.isSubmitting}
+        >
+          {t('verify')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Token({ onContinue }: StepProps) {
+  const { t } = useTranslation();
+  const hasStarted = useRef(false);
+  const [hasError, setHasError] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generate = useCallback(async () => {
+    setHasError(false);
+    setIsGenerating(true);
+
+    try {
+      await request(
+        'POST',
+        endpoint('/api/v1/einvoice/token/update'),
+        undefined,
+        { skipIntercept: true }
+      );
+
+      await request(
+        'GET',
+        endpoint('/api/v1/einvoice/health_check'),
+        undefined,
+        { skipIntercept: true }
+      );
+
+      onContinue();
+    } catch (error) {
+      console.error(error);
+      setHasError(true);
+      toast.error(t('token_regeneration_failed')!);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [onContinue, t]);
+
+  useEffect(() => {
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      generate();
+    }
+  }, [generate]);
+
+  if (!hasError) {
+    return <Spinner />;
+  }
+
+  return (
+    <div className="space-y-5">
+      <ErrorMessage>{t('token_regeneration_failed')}</ErrorMessage>
+
+      <div className="flex justify-end">
+        <Button
+          behavior="button"
+          type="primary"
+          onClick={generate}
+          disabled={isGenerating}
+        >
+          {t('regenerate_token')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function BuyCredits({ onContinue }: StepProps) {
+  const { t } = useTranslation();
+  const colors = useColorScheme();
+
+  return (
+    <div>
+      <p className="text-lg">{t('credits')}</p>
+      <p>{t('peppol_credits_info')}</p>
+
+      <div className="my-3 space-y-2">
+        <a
+          href="https://invoiceninja.invoicing.co/client/subscriptions/WJxboqNegw/purchase"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded w-full p-3 text-left border flex justify-between items-center hover:underline"
+          style={{
+            backgroundColor: colors.$1,
+          }}
+        >
+          {t('buy')} (PEPPOL 500)
+        </a>
+
+        <a
+          href="https://invoiceninja.invoicing.co/client/subscriptions/k8mep0reMy/purchase"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded w-full p-3 text-left border flex justify-between items-center hover:underline"
+          style={{
+            backgroundColor: colors.$1,
+          }}
+        >
+          {t('buy')} (PEPPOL 1000)
+        </a>
+      </div>
+
+      <div className="flex justify-end">
+        <Button behavior="button" type="primary" onClick={() => onContinue()}>
+          {t('continue')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+type FormProps = StepProps & {
+  businessType: Classification;
+  isSingapore: boolean;
+};
+
+function Form({ onContinue, businessType, isSingapore }: FormProps) {
+  const { t } = useTranslation();
+  const company = useCurrentCompany();
+  const refresh = useRefreshCompanyUsers();
+  const user = useCurrentUser();
+
+  const isFrance = company?.settings?.country_id === '250';
+
+  const [errors, setErrors] = useState<ValidationBag | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const form = useFormik({
+    initialValues: {
+      party_name: company?.settings?.name || '',
+      line1: company?.settings?.address1 || '',
+      line2: company?.settings?.address2 || '',
+      city: company?.settings?.city || '',
+      county: company?.settings?.state || '',
+      zip: company?.settings?.postal_code || '',
+      country: isSingapore ? '702' : company?.settings?.country_id || '',
+      acts_as_sender: true,
+      acts_as_receiver: true,
+      vat_number: company?.settings?.vat_number || '',
+      id_number: company?.settings.id_number || '',
+      c5_signer_name: isSingapore
+        ? `${user?.first_name || ''} ${user?.last_name || ''}`.trim()
+        : '',
+      c5_signer_email: isSingapore ? user?.email || '' : '',
+    },
+    onSubmit: (values, { setSubmitting }) => {
+      toast.processing();
+
+      setErrors(null);
+
+      request('POST', endpoint('/api/v1/einvoice/peppol/setup'), {
+        ...values,
+        tenant_id: company?.company_key,
+        classification: businessType,
+      })
+        .then((response: AxiosResponse) => {
+          const corppassUrl = response.data?.corppass_url;
+
+          if (corppassUrl) {
+            toast.success('Redirecting to CorpPass for verification...');
+            window.location.href = corppassUrl;
+            return;
+          }
+
+          toast.success('peppol_successfully_configured');
+
+          onContinue();
+
+          refresh();
+        })
+        .catch((e: AxiosError<ValidationBag>) => {
+          console.error(e);
+
+          if (e.response?.status === 422) {
+            setErrors(e.response.data);
+
+            toast.dismiss();
+
+            return;
+          }
+
+          if (e.response?.status === 401 && e.response.data?.message) {
+            setErrorMessage(e.response.data.message);
+          }
+
+          toast.error();
+        })
+        .finally(() => setSubmitting(false));
+    },
+  });
+
+  return (
+    <div>
+      <p className="text-lg">{t('details')}</p>
+      <p>{t('details_update_info')}</p>
+
+      <div className="my-4">
+        {errorMessage ? <ErrorMessage>{errorMessage}</ErrorMessage> : null}
+
+        {errors ? (
+          <ErrorMessage>
+            {errors.message ?? get(errors, 'errors.0.details')}
+          </ErrorMessage>
+        ) : null}
+      </div>
+
+      <form onSubmit={form.handleSubmit} className="space-y-5">
+        <InputField
+          label={t('company_name')}
+          value={form.values.party_name}
+          onChange={form.handleChange}
+          id="party_name"
+          errorMessage={get(errors, 'errors.party_name')}
+        />
+
+        {isSingapore ? (
+          <>
+            <InputField
+              value={form.values.id_number}
+              onChange={form.handleChange}
+              label="UEN (Unique Entity Number)"
+              id="id_number"
+              placeholder="e.g. 12345678A"
+              errorMessage={get(errors, 'errors.id_number')}
+            />
+
+            <InputField
+              value={form.values.c5_signer_name}
+              onChange={form.handleChange}
+              label={t('name')}
+              id="c5_signer_name"
+              errorMessage={get(errors, 'errors.c5_signer_name')}
+            />
+
+            <InputField
+              value={form.values.c5_signer_email}
+              onChange={form.handleChange}
+              label={t('email')}
+              id="c5_signer_email"
+              errorMessage={get(errors, 'errors.c5_signer_email')}
+            />
+          </>
+        ) : (
+          <>
+            {businessType === 'business' ? (
+              <InputField
+                value={form.values.vat_number}
+                onChange={form.handleChange}
+                label={t('vat_number')}
+                id="vat_number"
+                errorMessage={get(errors, 'errors.vat_number')}
+              />
+            ) : null}
+
+            {businessType === 'individual' || businessType === 'business' ? (
+              <InputField
+                value={form.values.id_number}
+                onChange={form.handleChange}
+                label={isFrance ? 'SIRET' : t('id_number')}
+                id="id_number"
+                errorMessage={get(errors, 'errors.id_number')}
+              />
+            ) : null}
+          </>
+        )}
+
+        <CountrySelector
+          value={form.values.country}
+          label={t('country')}
+          onChange={(e) => form.setFieldValue('country', e)}
+          errorMessage={get(errors, 'errors.country')}
+          disabled={isSingapore}
+        />
+
+        <InputField
+          value={form.values.line1}
+          id="line1"
+          label={t('address1')}
+          onChange={form.handleChange}
+          errorMessage={get(errors, 'errors.line1')}
+        />
+
+        <InputField
+          value={form.values.line2}
+          id="line2"
+          label={t('address2')}
+          onChange={form.handleChange}
+          errorMessage={get(errors, 'errors.line2')}
+        />
+
+        <InputField
+          value={form.values.city}
+          id="city"
+          label={t('city')}
+          onChange={form.handleChange}
+          errorMessage={get(errors, 'errors.city')}
+        />
+
+        <InputField
+          value={form.values.county}
+          id="county"
+          label={t('state')}
+          onChange={form.handleChange}
+          errorMessage={get(errors, 'errors.county')}
+        />
+
+        <InputField
+          value={form.values.zip}
+          id="zip"
+          label={t('postal_code')}
+          onChange={form.handleChange}
+          errorMessage={get(errors, 'errors.zip')}
+        />
+
+        <Toggle
+          checked={form.values.acts_as_sender}
+          label={t('acts_as_sender')}
+          id="acts_as_sender"
+          onChange={(v) => form.setFieldValue('acts_as_sender', v)}
+        />
+
+        <Toggle
+          checked={form.values.acts_as_receiver}
+          label={t('acts_as_receiver')}
+          id="acts_as_receiver"
+          onChange={(v) => form.setFieldValue('acts_as_receiver', v)}
+        />
+
+        <div className="flex justify-end">
+          <Button type="primary" disabled={form.isSubmitting}>
+            {t('continue')}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+type VatCheckProps = StepProps & {
+  businessType: Classification | undefined;
+  setBusinessType: (businessType: Classification) => void;
+  isSingapore: boolean;
+};
+
+function VatCheck({
+  businessType,
+  setBusinessType,
+  onContinue,
+  isSingapore,
+}: VatCheckProps) {
+  const { t } = useTranslation();
+
+  const accentColor = useAccentColor();
+  const colors = useColorScheme();
+
+  if (isSingapore) {
+    return (
+      <div>
+        <p className="text-lg">Select your entity classification</p>
+
+        <div className="my-5 space-y-2">
+          <button
+            className="rounded w-full p-3 text-left border flex justify-between items-center"
+            style={{
+              backgroundColor: colors.$1,
+              borderColor:
+                businessType === 'business' ? accentColor : colors.$5,
+            }}
+            onClick={() => setBusinessType('business')}
+          >
+            <p>{t('business')}</p>
+
+            <Check
+              size={18}
+              color={accentColor}
+              className={classNames({
+                hidden: businessType !== 'business',
+              })}
+            />
+          </button>
+
+          <button
+            className="rounded w-full p-3 text-left border flex justify-between items-center"
+            style={{
+              backgroundColor: colors.$1,
+              borderColor:
+                businessType === 'government' ? accentColor : colors.$5,
+            }}
+            onClick={() => setBusinessType('government')}
+          >
+            <p>{t('government')}</p>
+
+            <Check
+              size={18}
+              color={accentColor}
+              className={classNames({
+                hidden: businessType !== 'government',
+              })}
+            />
+          </button>
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            behavior="button"
+            type="primary"
+            disabled={!businessType}
+            disableWithoutIcon
+            onClick={() => onContinue()}
+          >
+            {t('continue')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-lg">Are you registered for VAT?</p>
+
+      <div className="my-5 space-y-2">
+        <button
+          className="rounded w-full p-3 text-left border flex justify-between items-center"
+          style={{
+            backgroundColor: colors.$1,
+            borderColor: businessType === 'business' ? accentColor : colors.$5,
+          }}
+          onClick={() => setBusinessType('business')}
+        >
+          <p>Yes, I have a VAT number</p>
+
+          <Check
+            size={18}
+            color={accentColor}
+            className={classNames({
+              hidden: businessType !== 'business',
+            })}
+          />
+        </button>
+
+        <button
+          className="rounded w-full p-3 text-left border flex justify-between items-center"
+          style={{
+            backgroundColor: colors.$1,
+            borderColor:
+              businessType === 'individual' ? accentColor : colors.$5,
+          }}
+          onClick={() => setBusinessType('individual')}
+        >
+          <p>No, I am an individual</p>
+
+          <Check
+            size={18}
+            color={accentColor}
+            className={classNames({
+              hidden: businessType !== 'individual',
+            })}
+          />
+        </button>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          behavior="button"
+          type="primary"
+          disabled={!businessType}
+          disableWithoutIcon
+          onClick={() => onContinue()}
+        >
+          {t('continue')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function Disconnect() {
+  const accentColor = useAccentColor();
+  const refresh = useRefreshCompanyUsers();
+  const company = useCurrentCompany();
+  const account = useCurrentAccount();
+
+  const { t } = useTranslation();
+
+  const [isVisible, setIsVisible] = useState(false);
+
+  const disconnect = () => {
+    toast.processing();
+
+    request('POST', endpoint('/api/v1/einvoice/peppol/disconnect'), {
+      company_key: company.company_key,
+      legal_entity_id: company.legal_entity_id,
+      tax_data: company.tax_data,
+      e_invoicing_token: account?.e_invoicing_token,
+    })
+      .then(() => {
+        toast.success('disconnected');
+      })
+      .catch(() => {
+        toast.error();
+      })
+      .finally(() => {
+        setIsVisible(false);
+
+        refresh();
+      });
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        style={{ color: accentColor }}
+        onClick={() => setIsVisible(true)}
+      >
+        {t('disconnect')}
+      </button>
+
+      <Modal
+        title={t('peppol_disconnect')}
+        visible={isVisible}
+        onClose={() => setIsVisible(false)}
+      >
+        {t('peppol_disconnect_long')}
+
+        <div className="flex justify-end mt-5">
+          <Button behavior="button" type="primary" onClick={disconnect}>
+            {t('continue')}
+          </Button>
+        </div>
+      </Modal>
+    </>
+  );
+}

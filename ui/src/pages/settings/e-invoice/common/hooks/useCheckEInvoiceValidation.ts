@@ -1,0 +1,98 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useQueryClient } from '@tanstack/react-query';
+import { cloneDeep } from 'lodash';
+import { useEffect, useState } from 'react';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { Credit } from '$app/common/interfaces/credit';
+import { Invoice } from '$app/common/interfaces/invoice';
+import { RecurringInvoice } from '$app/common/interfaces/recurring-invoice';
+
+interface Params {
+  resource: Invoice | RecurringInvoice | Credit | undefined;
+  entity?: 'invoice' | 'recurring_invoice' | 'credit';
+  enableQuery: boolean;
+  onFinished?: () => void;
+}
+
+export interface EntityError {
+  field: string;
+  label?: string;
+}
+
+export interface ValidationEntityResponse {
+  passes: boolean;
+  invoice: string[];
+  credit: string[];
+  client: EntityError[];
+  company: EntityError[];
+}
+
+export function useCheckEInvoiceValidation(params: Params) {
+  const { resource, entity = 'invoice', enableQuery, onFinished } = params;
+
+  const isEntityValidationQueryEnabled =
+    import.meta.env.VITE_ENABLE_PEPPOL_STANDARD === 'true' ||
+    import.meta.env.VITE_ENABLE_VERIFACTU_STANDARD === 'true';
+
+  const queryClient = useQueryClient();
+
+  const [validationEntityResponse, setValidationEntityResponse] = useState<
+    ValidationEntityResponse | undefined
+  >();
+
+  const handleCheckValidation = async () => {
+    const validationResponse = await queryClient.fetchQuery({
+      queryKey: ['/api/v1/einvoice/validateEntity', resource?.id],
+
+      queryFn: () =>
+        request('POST', endpoint('/api/v1/einvoice/validateEntity'), {
+          entity: `${entity}s`,
+          entity_id: resource?.id,
+        })
+          .then((response) => response)
+          .catch((error) => error.response),
+
+      staleTime: Infinity,
+    });
+
+    let currentValidationResult = {
+      client: [],
+      company: [],
+      invoice: [],
+      credit: [],
+      passes: true,
+    };
+
+    if (validationResponse?.status === 422) {
+      currentValidationResult = {
+        company: validationResponse.data.company ?? [],
+        client: validationResponse.data.client ?? [],
+        invoice: validationResponse.data.invoice ?? [],
+        credit: validationResponse.data.credit ?? [],
+        passes: false,
+      };
+    }
+
+    setValidationEntityResponse(cloneDeep(currentValidationResult));
+
+    onFinished?.();
+  };
+
+  useEffect(() => {
+    if (enableQuery && resource) {
+      handleCheckValidation();
+    }
+  }, [enableQuery, resource]);
+
+  return { validationResponse: validationEntityResponse };
+}

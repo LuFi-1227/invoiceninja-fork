@@ -69,3 +69,6 @@ node_modules/
 /resources/views/react.bak.*/
 *.bak
 /public/react.bak*
+
+# UI source local env
+/ui/.env

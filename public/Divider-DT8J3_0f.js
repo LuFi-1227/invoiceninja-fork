@@ -1,0 +1,1 @@
+import{a as e}from"./rolldown-runtime-CNC7AqOf.js";import{ft as t,xt as n}from"./forms-BFr2WPc7.js";import{t as r}from"./jsx-runtime-CTknu7_t.js";var i=e(t(),1),a=e(r(),1);function o(e){let t=n();return(0,a.jsx)(`div`,{style:{borderColor:e.borderColor||t.$21},className:(0,i.default)(`border-b`,{"pt-6 mb-4 border-b":!e.withoutPadding},e.className??``)})}export{o as t};

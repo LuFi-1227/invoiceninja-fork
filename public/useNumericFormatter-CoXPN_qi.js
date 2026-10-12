@@ -1,0 +1,1 @@
+import{Ar as e}from"./forms-BFr2WPc7.js";import{n as t}from"./NumberInputField-CY7ZvlAJ.js";import{l as n}from"./hooks-FZ4bL58A.js";function r(){let r=e(),i=n(),a=e=>e||(r?.use_comma_as_decimal_place?`.`:`,`),o=e=>e||(r?.use_comma_as_decimal_place?`,`:`.`);return(e,n,r,s)=>t(e.replaceAll(`,`,``),{thousandSeparator:a(n),decimalSeparator:o(r),decimalScale:s||i})}export{r as t};

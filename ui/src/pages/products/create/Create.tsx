@@ -1,0 +1,131 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { AxiosError } from 'axios';
+import { useAtom } from 'jotai';
+import { cloneDeep } from 'lodash';
+import { FormEvent, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { endpoint } from '$app/common/helpers';
+import { request } from '$app/common/helpers/request';
+import { route } from '$app/common/helpers/route';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
+import { $refetch } from '$app/common/hooks/useRefetch';
+import { useTitle } from '$app/common/hooks/useTitle';
+import { GenericSingleResourceResponse } from '$app/common/interfaces/generic-api-response';
+import { ValidationBag } from '$app/common/interfaces/validation-bag';
+import { useBlankProductQuery } from '$app/common/queries/products';
+import { Container } from '$app/components/Container';
+import { Default } from '$app/components/layouts/Default';
+import { Spinner } from '$app/components/Spinner';
+import { ProductTableResource } from '$app/pages/invoices/common/components/ProductsTable';
+import { productAtom } from '../common/atoms';
+import { CreateProduct } from '../common/components/CreateProduct';
+
+export default function Create() {
+  const { documentTitle } = useTitle('new_product');
+
+  const [t] = useTranslation();
+
+  const navigate = useNavigate();
+
+  const currentCompany = useCurrentCompany();
+  const [product, setProduct] = useAtom(productAtom);
+
+  const { data } = useBlankProductQuery({
+    enabled: typeof product === 'undefined',
+  });
+
+  const pages = [
+    { name: t('products'), href: '/products' },
+    { name: t('new_product'), href: '/products/create' },
+  ];
+
+  const [searchParams] = useSearchParams();
+  const [errors, setErrors] = useState<ValidationBag>();
+  const [isFormBusy, setIsFormBusy] = useState<boolean>(false);
+
+  const handleSave = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!isFormBusy) {
+      setIsFormBusy(true);
+
+      request('POST', endpoint('/api/v1/products'), product)
+        .then(
+          (response: GenericSingleResourceResponse<ProductTableResource>) => {
+            $refetch(['products']);
+
+            toast.success('created_product');
+
+            navigate(
+              route('/products/:id/edit', {
+                id: response.data.data.id,
+              })
+            );
+          }
+        )
+        .catch((error: AxiosError<ValidationBag>) => {
+          if (error.response?.status === 422) {
+            setErrors(error.response.data);
+            toast.dismiss();
+          }
+        })
+        .finally(() => setIsFormBusy(false));
+    }
+  };
+
+  useEffect(() => {
+    setProduct((current) => {
+      let value = current;
+
+      if (searchParams.get('action') !== 'clone') {
+        value = undefined;
+      }
+
+      if (
+        typeof data !== 'undefined' &&
+        typeof value === 'undefined' &&
+        searchParams.get('action') !== 'clone'
+      ) {
+        value = cloneDeep(data);
+
+        if (
+          currentCompany?.quickbooks &&
+          import.meta.env.VITE_DISABLE_QUICKBOOKS_INTEGRATION !== 'true'
+        ) {
+          value.income_account_id =
+            currentCompany.quickbooks.settings?.income_account_id || '';
+        }
+      }
+
+      return value;
+    });
+  }, [data]);
+
+  return (
+    <Default
+      title={documentTitle}
+      breadcrumbs={pages}
+      disableSaveButton={!product || isFormBusy}
+      onSaveClick={handleSave}
+    >
+      <Container breadcrumbs={[]}>
+        {product ? (
+          <CreateProduct errors={errors} setErrors={setErrors} />
+        ) : (
+          <Spinner />
+        )}
+      </Container>
+    </Default>
+  );
+}

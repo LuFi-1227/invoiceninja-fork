@@ -1,0 +1,1 @@
+import{Dt as e,Oi as t,zt as n}from"./forms-BFr2WPc7.js";function r(){let r=t();return{find:t=>r.fetchQuery({queryKey:[`/api/v1/clients`,t],queryFn:()=>n(`GET`,e(`/api/v1/clients/:id?include=group_settings`,{id:t})).then(e=>e.data.data),staleTime:1/0})}}export{r as t};

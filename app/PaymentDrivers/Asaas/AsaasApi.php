@@ -59,6 +59,12 @@ class AsaasApi
             $cpfCnpj = preg_replace('/\D/', '', $client->vat_number ?: ($client->id_number ?: ''));
         }
 
+        // Reuse the previously stored Asaas customer id when available so the
+        // same customer is never duplicated on Asaas.
+        if (!empty($client->asaas_id)) {
+            return (string) $client->asaas_id;
+        }
+
         // Check if customer already exists by externalReference or cpfCnpj
         if (!empty($client->hashed_id)) {
             $existing = $this->client()->get($this->baseUrl . '/customers', [
@@ -66,9 +72,10 @@ class AsaasApi
             ]);
 
             if ($existing->successful() && !empty($existing->json('data.0.id'))) {
-                $customerId = $existing->json('data.0.id');
+                $customerId = (string) $existing->json('data.0.id');
                 // Update customer info
                 $this->updateCustomer($customerId, $client, $cpfCnpj);
+                $this->persistCustomerId($client, $customerId);
                 return $customerId;
             }
         }
@@ -79,8 +86,9 @@ class AsaasApi
             ]);
 
             if ($existingByCpf->successful() && !empty($existingByCpf->json('data.0.id'))) {
-                $customerId = $existingByCpf->json('data.0.id');
+                $customerId = (string) $existingByCpf->json('data.0.id');
                 $this->updateCustomer($customerId, $client, $cpfCnpj);
+                $this->persistCustomerId($client, $customerId);
                 return $customerId;
             }
         }
@@ -114,7 +122,24 @@ class AsaasApi
             throw new \Exception('Asaas customer creation failed: ' . $errorMsg);
         }
 
-        return (string) $response->json('id');
+        $customerId = (string) $response->json('id');
+        $this->persistCustomerId($client, $customerId);
+
+        return $customerId;
+    }
+
+    /**
+     * Persist the Asaas customer id on the client (hidden field), reusing the
+     * already loaded instance so subsequent charges skip the lookup/creation.
+     */
+    private function persistCustomerId(Client $client, string $customerId): void
+    {
+        if ($customerId === '' || (string) $client->asaas_id === $customerId) {
+            return;
+        }
+
+        $client->asaas_id = $customerId;
+        $client->saveQuietly();
     }
 
     /**

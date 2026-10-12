@@ -1,0 +1,177 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useTitle } from '$app/common/hooks/useTitle';
+import { DataTable } from '$app/components/DataTable';
+import { DataTableColumnsPicker } from '$app/components/DataTableColumnsPicker';
+import { Default } from '$app/components/layouts/Default';
+import { useTranslation } from 'react-i18next';
+import {
+  defaultColumns,
+  useActions,
+  useAllCreditColumns,
+  useCreditColumns,
+} from '../common/hooks';
+import {
+  useEntityTagFilterColumns,
+  useTagFilterCleanup,
+} from '$app/common/hooks/useEntityTagFilters';
+import { TAG_ENTITY_TYPES } from '$app/common/interfaces/tag';
+import { permission } from '$app/common/guards/guards/permission';
+import { useCustomBulkActions } from '../common/hooks/useCustomBulkActions';
+import { useCreditsFilters } from '../common/hooks/useCreditsFilters';
+import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
+import {
+  ChangeTemplateModal,
+  useChangeTemplate,
+} from '$app/pages/settings/invoice-design/pages/custom-designs/components/ChangeTemplate';
+import { Credit } from '$app/common/interfaces/credit';
+import { useDateRangeColumns } from '../common/hooks/useDateRangeColumns';
+import { useSocketEvent } from '$app/common/queries/sockets';
+import { $refetch } from '$app/common/hooks/useRefetch';
+import { InputLabel } from '$app/components/forms';
+import { useReactSettings } from '$app/common/hooks/useReactSettings';
+import {
+  CreditSlider,
+  creditSliderAtom,
+  creditSliderVisibilityAtom,
+} from '../common/components/CreditSlider';
+import { useAtom } from 'jotai';
+import { useCreditQuery } from '../common/queries';
+import { useEffect, useState } from 'react';
+import { useDisableNavigation } from '$app/common/hooks/useDisableNavigation';
+
+export default function Credits() {
+  useTitle('credits');
+
+  const [t] = useTranslation();
+  const hasPermission = useHasPermission();
+  const disableNavigation = useDisableNavigation();
+
+  const pages = [{ name: t('credits'), href: '/credits' }];
+
+  const actions = useActions();
+  const columns = useCreditColumns();
+  const filters = useCreditsFilters();
+  const reactSettings = useReactSettings();
+  const creditColumns = useAllCreditColumns();
+  const dateRangeColumns = useDateRangeColumns();
+  const customBulkActions = useCustomBulkActions();
+
+  const selectedColumns =
+    reactSettings?.react_table_columns?.credit || defaultColumns;
+  const shouldShowTagFilter = selectedColumns.includes('tags');
+  const filterColumns = useEntityTagFilterColumns(
+    TAG_ENTITY_TYPES.credit,
+    'credit_tag_ids',
+    { enabled: shouldShowTagFilter }
+  );
+
+  useTagFilterCleanup(shouldShowTagFilter, 'credit_tag_ids');
+
+  const [sliderCreditId, setSliderCreditId] = useState<string>('');
+  const [creditSlider, setCreditSlider] = useAtom(creditSliderAtom);
+  const [creditSliderVisibility, setCreditSliderVisibility] = useAtom(
+    creditSliderVisibilityAtom
+  );
+
+  const { data: creditResponse } = useCreditQuery({ id: sliderCreditId });
+
+  useEffect(() => {
+    setCreditSlider(null);
+  }, [sliderCreditId]);
+
+  useEffect(() => {
+    if (creditResponse && creditSliderVisibility) {
+      setCreditSlider(creditResponse);
+    }
+  }, [creditResponse, creditSliderVisibility]);
+
+  useEffect(() => {
+    return () => setCreditSliderVisibility(false);
+  }, []);
+
+  const {
+    changeTemplateVisible,
+    setChangeTemplateVisible,
+    changeTemplateResources,
+  } = useChangeTemplate();
+
+  useSocketEvent({
+    on: [
+      'App\\Events\\Credit\\CreditWasCreated',
+      'App\\Events\\Credit\\CreditWasUpdated',
+    ],
+    callback: () => $refetch(['credits']),
+  });
+
+  return (
+    <Default title={t('credits')} breadcrumbs={pages} docsLink="en/credits/">
+      <DataTable
+        resource="credit"
+        endpoint={`/api/v1/credits?include=client${
+          shouldShowTagFilter ? ',tags' : ''
+        }&without_deleted_clients=true&sort=id|desc${
+          shouldShowTagFilter ? '' : '&tag_ids='
+        }`}
+        bulkRoute="/api/v1/credits/bulk"
+        columns={columns}
+        linkToCreate="/credits/create"
+        linkToEdit="/credits/:id/edit"
+        customActions={actions}
+        customBulkActions={customBulkActions}
+        customFilters={filters}
+        customFilterPlaceholder="status"
+        filterColumns={shouldShowTagFilter ? filterColumns : undefined}
+        withResourcefulActions
+        rightSide={
+          <DataTableColumnsPicker
+            columns={creditColumns as unknown as string[]}
+            defaultColumns={defaultColumns}
+            table="credit"
+          />
+        }
+        dateRangeColumns={dateRangeColumns}
+        linkToCreateGuards={[permission('create_credit')]}
+        hideEditableOptions={!hasPermission('edit_credit')}
+        onTableRowClick={(credit) => {
+          setSliderCreditId(credit.id);
+          setCreditSliderVisibility(true);
+        }}
+        enableSavingFilterPreference
+        enableSavingLatestDataForNavigation
+      />
+
+      {!disableNavigation('credit', creditSlider) && <CreditSlider />}
+
+      <ChangeTemplateModal<Credit>
+        entity="credit"
+        entities={changeTemplateResources as Credit[]}
+        visible={changeTemplateVisible}
+        setVisible={setChangeTemplateVisible}
+        labelFn={(credit) => (
+          <div className="flex flex-col space-y-1">
+            <InputLabel>{t('number')}</InputLabel>
+
+            <span>{credit.number}</span>
+          </div>
+        )}
+        bulkLabelFn={(credit) => (
+          <div className="flex space-x-2">
+            <InputLabel>{t('number')}:</InputLabel>
+
+            <span>{credit.number}</span>
+          </div>
+        )}
+        bulkUrl="/api/v1/credits/bulk"
+      />
+    </Default>
+  );
+}

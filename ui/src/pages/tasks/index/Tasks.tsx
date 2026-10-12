@@ -1,0 +1,208 @@
+/**
+ * Invoice Ninja (https://invoiceninja.com).
+ *
+ * @link https://github.com/invoiceninja/invoiceninja source repository
+ *
+ * @copyright Copyright (c) 2022. Invoice Ninja LLC (https://invoiceninja.com)
+ *
+ * @license https://www.elastic.co/licensing/elastic-license
+ */
+
+import { useAtom } from 'jotai';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { emitter } from '$app';
+import { Guard } from '$app/common/guards/Guard';
+import { or } from '$app/common/guards/guards/or';
+import { permission } from '$app/common/guards/guards/permission';
+import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
+import { useDisableNavigation } from '$app/common/hooks/useDisableNavigation';
+import { useTitle } from '$app/common/hooks/useTitle';
+import { Task } from '$app/common/interfaces/task';
+import { useTaskQuery } from '$app/common/queries/tasks';
+import {
+  DataTable,
+  dateRangeAtom,
+  filterColumnsValuesAtom,
+} from '$app/components/DataTable';
+import { DataTableColumnsPicker } from '$app/components/DataTableColumnsPicker';
+import { Button, InputLabel } from '$app/components/forms';
+import { ImportButton } from '$app/components/import/ImportButton';
+import { Default } from '$app/components/layouts/Default';
+import {
+  ChangeTemplateModal,
+  useChangeTemplate,
+} from '$app/pages/settings/invoice-design/pages/custom-designs/components/ChangeTemplate';
+import { ExtensionBanner } from '../common/components/ExtensionBanner';
+import { TaskHeaderControls } from '../common/components/TaskHeaderControls';
+import {
+  TaskSlider,
+  taskSliderAtom,
+  taskSliderVisibilityAtom,
+} from '../common/components/TaskSlider';
+import { useTaskUserFilters } from '../common/components/TaskUserFilters';
+import {
+  defaultColumns,
+  useActions,
+  useAllTaskColumns,
+  useCustomBulkActions,
+  useTaskColumns,
+  useTaskFilters,
+} from '../common/hooks';
+import { useFilterColumns } from '../common/hooks/useFilterColumns';
+import { useShowEditOption } from '../common/hooks/useShowEditOption';
+
+export default function Tasks() {
+  const { documentTitle } = useTitle('tasks');
+
+  const [t] = useTranslation();
+  const hasPermission = useHasPermission();
+  const showEditOption = useShowEditOption();
+  const disableNavigation = useDisableNavigation();
+
+  const pages = [{ name: t('tasks'), href: '/tasks' }];
+
+  const actions = useActions();
+  const filters = useTaskFilters();
+  const columns = useTaskColumns();
+  const taskColumns = useAllTaskColumns();
+  const filterColumns = useFilterColumns();
+  const customBulkActions = useCustomBulkActions();
+  const userFilter = useTaskUserFilters();
+
+  const [taskSlider, setTaskSlider] = useAtom(taskSliderAtom);
+  const [sliderTaskId, setSliderTaskId] = useState<string>('');
+  const [dateRangeEntries, setDateRangeEntries] = useAtom(dateRangeAtom);
+  const [taskSliderVisibility, setTaskSliderVisibility] = useAtom(
+    taskSliderVisibilityAtom
+  );
+  const [filterColumnsValues, setFilterColumnsValues] = useAtom(
+    filterColumnsValuesAtom
+  );
+
+  const { data: taskResponse } = useTaskQuery({ id: sliderTaskId });
+
+  const currentFilterColumnsCount = useMemo(
+    () =>
+      filterColumns.filter(
+        (column) => (filterColumnsValues[column.column_id] || []).length > 0
+      ).length,
+    [filterColumns, filterColumnsValues]
+  );
+
+  const currentDateRangeColumnsCount = useMemo(
+    () =>
+      dateRangeEntries.filter(
+        (entry) => entry.startDate.length > 0 && entry.endDate.length > 0
+      ).length,
+    [dateRangeEntries]
+  );
+
+  useEffect(() => {
+    if (taskResponse && taskSliderVisibility) {
+      setTaskSlider(taskResponse);
+    }
+  }, [taskResponse, taskSliderVisibility]);
+
+  useEffect(() => {
+    return () => setTaskSliderVisibility(false);
+  }, []);
+
+  const {
+    changeTemplateVisible,
+    setChangeTemplateVisible,
+    changeTemplateResources,
+  } = useChangeTemplate();
+
+  return (
+    <Default
+      title={documentTitle}
+      breadcrumbs={pages}
+      topRight={<TaskHeaderControls />}
+      aboveMainContainer={<ExtensionBanner />}
+    >
+      <DataTable
+        resource="task"
+        columns={columns}
+        customActions={actions}
+        endpoint={`/api/v1/tasks?include=status,client,project,user,assigned_user,tags&without_deleted_clients=true&sort=id|desc${userFilter.queryString}`}
+        bulkRoute="/api/v1/tasks/bulk"
+        linkToCreate="/tasks/create"
+        linkToEdit="/tasks/:id/edit"
+        showEdit={(task: Task) => showEditOption(task)}
+        customFilters={filters}
+        customBulkActions={customBulkActions}
+        customFilterPlaceholder="status"
+        withResourcefulActions
+        rightSide={
+          <div className="flex items-center space-x-2">
+            {(currentFilterColumnsCount > 0 ||
+              currentDateRangeColumnsCount > 0) && (
+              <Button
+                type="secondary"
+                behavior="button"
+                onClick={() => {
+                  setFilterColumnsValues({});
+                  setDateRangeEntries([]);
+                  emitter.emit('date_range_picker.clear');
+                }}
+              >
+                {t('clear_filters')} (
+                {currentFilterColumnsCount + currentDateRangeColumnsCount})
+              </Button>
+            )}
+
+            <DataTableColumnsPicker
+              columns={taskColumns as unknown as string[]}
+              defaultColumns={defaultColumns}
+              table="task"
+            />
+
+            <Guard
+              type="component"
+              component={<ImportButton route="/tasks/import" />}
+              guards={[or(permission('create_task'), permission('edit_task'))]}
+            />
+          </div>
+        }
+        linkToCreateGuards={[permission('create_task')]}
+        hideEditableOptions={!hasPermission('edit_task')}
+        onTableRowClick={(quote) => {
+          setSliderTaskId(quote.id);
+          setTaskSliderVisibility(true);
+        }}
+        enableSavingFilterPreference
+        filterColumns={filterColumns}
+        dateRangeColumns={[
+          { column: 'calculated_start_date', queryParameterKey: 'date_range' },
+          { column: 'created_at', queryParameterKey: 'created_between' },
+        ]}
+        enableSavingLatestDataForNavigation
+      />
+
+      {!disableNavigation('task', taskSlider) && <TaskSlider />}
+
+      <ChangeTemplateModal<Task>
+        entity="task"
+        entities={changeTemplateResources as Task[]}
+        visible={changeTemplateVisible}
+        setVisible={setChangeTemplateVisible}
+        labelFn={(task) => (
+          <div className="flex flex-col space-y-1">
+            <InputLabel>{t('number')}</InputLabel>
+
+            <span>{task.number}</span>
+          </div>
+        )}
+        bulkLabelFn={(task) => (
+          <div className="flex space-x-2">
+            <InputLabel>{t('number')}:</InputLabel>
+
+            <span>{task.number}</span>
+          </div>
+        )}
+        bulkUrl="/api/v1/tasks/bulk"
+      />
+    </Default>
+  );
+}
