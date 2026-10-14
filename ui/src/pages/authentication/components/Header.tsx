@@ -16,7 +16,11 @@ export function Header() {
     <>
       <div className="flex justify-center py-8">
         <Link to="/">
-          <img src={Logo} alt="Invoice Ninja Logo" className="h-12" />
+          <img
+            src={Logo}
+            alt="Gestore Mio"
+            className="h-16 md:h-20 w-auto object-contain"
+          />
         </Link>
       </div>
     </>

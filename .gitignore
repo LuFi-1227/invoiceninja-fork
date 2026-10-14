@@ -72,3 +72,4 @@ node_modules/
 
 # UI source local env
 /ui/.env
+*.tsbuildinfo

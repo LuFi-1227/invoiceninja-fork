@@ -1,0 +1,1 @@
+var e=`/invoiceninja-logo@dark-jOeBNlJt.png`;export{e as t};

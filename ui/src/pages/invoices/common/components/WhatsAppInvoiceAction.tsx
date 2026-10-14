@@ -150,7 +150,7 @@ export function WhatsAppInvoiceAction(props: Props) {
               label="Mensagem"
               rows={7}
               value={message}
-              onChange={(event) => setMessage(event.target.value)}
+              onChange={(event: any) => setMessage(event.target.value)}
             />
 
             <div className="flex flex-col space-y-3">

@@ -25,7 +25,7 @@
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo180.png" />
     <link rel="manifest" href="/manifest.json" />
-    <script type="module" crossorigin src="/bundle.D8DKN9ik.js"></script>
+    <script type="module" crossorigin src="/bundle.BThtIqs9.js"></script>
     <link rel="modulepreload" crossorigin href="/rolldown-runtime-CNC7AqOf.js">
     <link rel="modulepreload" crossorigin href="/react-Augu_vA3.js">
     <link rel="modulepreload" crossorigin href="/jsx-runtime-CTknu7_t.js">
@@ -147,14 +147,14 @@
     <link rel="modulepreload" crossorigin href="/useNumericFormatter-CQuQIdPa.js">
     <link rel="modulepreload" crossorigin href="/Variable-BbxMDVq4.js">
     <link rel="modulepreload" crossorigin href="/index.esm-D0e26ydA.js">
-    <link rel="modulepreload" crossorigin href="/invoiceninja-logo@dark-Vey_CsTT.js">
+    <link rel="modulepreload" crossorigin href="/invoiceninja-logo@dark-DkJHikkC.js">
     <link rel="modulepreload" crossorigin href="/dist-ItKxkH-G.js">
     <link rel="modulepreload" crossorigin href="/editor.api-D67F9Akq.js">
     <link rel="modulepreload" crossorigin href="/monaco.contribution-GvmOpcHO.js">
-    <link rel="modulepreload" crossorigin href="/src-BtXiH-34.js">
+    <link rel="modulepreload" crossorigin href="/src-y74yCP0c.js">
     <link rel="stylesheet" crossorigin href="/forms-CZOhJl4e.css">
     <link rel="stylesheet" crossorigin href="/editor-BjLDz43t.css">
-    <link rel="stylesheet" crossorigin href="/src-C31QBSVz.css">
+    <link rel="stylesheet" crossorigin href="/src-BOoSVHnf.css">
   </head>
 
   <body class="h-full">

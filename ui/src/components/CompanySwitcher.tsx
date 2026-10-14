@@ -335,7 +335,7 @@ export function CompanySwitcher() {
         >
           {isMiniSidebar ? (
             <img
-              className="rounded-full border overflow-hidden aspect-square object-cover"
+              className="rounded-full border overflow-hidden aspect-square object-cover bg-white"
               src={logo}
               alt="Company logo"
               style={{
@@ -346,7 +346,7 @@ export function CompanySwitcher() {
           ) : (
             <div className="flex items-center space-x-3 p-1.5 rounded-md hover:bg-gray-700 w-full min-w-0">
               <img
-                className="rounded-full border overflow-hidden aspect-square object-cover flex-shrink-0"
+                className="rounded-full border overflow-hidden aspect-square object-cover flex-shrink-0 bg-white"
                 src={logo}
                 alt="Company logo"
                 style={{

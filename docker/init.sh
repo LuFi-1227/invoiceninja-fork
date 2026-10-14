@@ -1,49 +1,42 @@
 #!/bin/sh -eu
 
-# Browser used by snappdf for PDF generation
+# Set PDF generation browser path based on architecture
 if [ "$(dpkg --print-architecture)" = "amd64" ]; then
     export SNAPPDF_CHROMIUM_PATH=/usr/bin/google-chrome-stable
-else
+elif [ "$(dpkg --print-architecture)" = "arm64" ]; then
     export SNAPPDF_CHROMIUM_PATH=/usr/bin/chromium
 fi
 
 if [ "$*" = 'supervisord -c /etc/supervisor/supervisord.conf' ]; then
 
-    # Required folders (created inside the mounted volumes on first run)
+    # Check for required folders and create if needed
+    mkdir -p /var/www/html/bootstrap/cache
+    chown -R www-data:www-data /var/www/html/bootstrap/cache
+    chmod -R 775 /var/www/html/bootstrap/cache
+
     [ -d /var/www/html/public ] || mkdir -p /var/www/html/public
     [ -d /var/www/html/storage/app/public ] || mkdir -p /var/www/html/storage/app/public
     [ -d /var/www/html/storage/framework/sessions ] || mkdir -p /var/www/html/storage/framework/sessions
     [ -d /var/www/html/storage/framework/views ] || mkdir -p /var/www/html/storage/framework/views
     [ -d /var/www/html/storage/framework/cache ] || mkdir -p /var/www/html/storage/framework/cache
 
-    # Sync the image's public files into the public volume when a new container
-    # starts, then clear the source so a restart does not overwrite files
-    # created at runtime (e.g. .well-known).
-    if [ "$(ls -A /tmp/public 2>/dev/null)" ]; then
-        echo "Updating public folder..."
-        rm -rf /var/www/html/public/.htaccess \
-            /var/www/html/public/.well-known \
-            /var/www/html/public/*
-        cp -r /tmp/public/* /tmp/public/.htaccess /tmp/public/.well-known /var/www/html/public/
-        rm -rf /tmp/public/.htaccess /tmp/public/.well-known /tmp/public/*
-    fi
-    echo "Public folder is up to date"
+    # Ensure storage permissions
+    chown -R www-data:www-data /var/www/html/storage
+    chmod -R 775 /var/www/html/storage
 
-    # Permissions for the volume mounted folders
-    chown -R www-data:www-data /var/www/html/public /var/www/html/storage
-    find /var/www/html/public /var/www/html/storage -type f -exec chmod 644 {} \;
-    find /var/www/html/public /var/www/html/storage -type d -exec chmod 755 {} \;
+    # Ensure public index.html symlink for React UI
+    if [ ! -L /var/www/html/public/index.html ] && [ ! -f /var/www/html/public/index.html ]; then
+        ln -sf /var/www/html/resources/views/react/index.blade.php /var/www/html/public/index.html
+    fi
 
     if [ "${APP_ENV:-production}" = "production" ]; then
-        # First boot race: the database may still be starting even though it
-        # already answered its healthcheck, so wait for TCP connectivity.
         waits=0
         until MYSQL_PWD="${DB_PASSWORD:-ninja}" mysqladmin ping \
-            --host="${DB_HOST:-db}" --port="${DB_PORT:-3306}" \
+            --host="${DB_HOST:-mysql}" --port="${DB_PORT:-3306}" \
             --user="${DB_USERNAME:-ninja}" --silent >/dev/null 2>&1; do
             waits=$((waits + 1))
             if [ "$waits" -ge 60 ]; then
-                echo "Database ${DB_HOST:-db}:${DB_PORT:-3306} is not reachable" >&2
+                echo "Database ${DB_HOST:-mysql}:${DB_PORT:-3306} is not reachable" >&2
                 exit 1
             fi
             echo "Waiting for database..."
@@ -65,6 +58,25 @@ if [ "$*" = 'supervisord -c /etc/supervisor/supervisord.conf' ]; then
                 echo "No account found - open ${APP_URL:-http://localhost}/setup to create the first account"
             fi
         fi
+
+        # Ensure the client CPF/CNPJ custom field label exists (idempotent).
+        # The backfill migration can run before the first company is created,
+        # so re-apply it here after the account/company exists.
+        runuser -u www-data -- php artisan tinker --execute='
+            App\Models\Company::query()->each(function ($c) {
+                $cf = (object) ($c->custom_fields ?? []);
+                if (empty($cf->client1)) {
+                    $cf->client1 = "CPF / CNPJ|single_line_text";
+                } elseif (! str_contains($cf->client1, "|")) {
+                    $cf->client1 = $cf->client1 . "|single_line_text";
+                } else {
+                    return;
+                }
+                $c->custom_fields = $cf;
+                $c->saveQuietly();
+            });
+        '
+
         echo "Production setup completed"
     fi
 

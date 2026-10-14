@@ -336,7 +336,7 @@ export function WhatsApp() {
             rows={8}
             value={config.message_template}
             placeholder="Olá, *:contact*! Sua fatura *:invoice*..."
-            onChange={(event) =>
+            onChange={(event: any) =>
               updateConfig('message_template', event.target.value)
             }
           />
@@ -481,7 +481,7 @@ export function WhatsApp() {
             rows={3}
             value={testMessage}
             placeholder="Olá! Esta é uma mensagem de teste."
-            onChange={(event) => setTestMessage(event.target.value)}
+            onChange={(event: any) => setTestMessage(event.target.value)}
           />
         </Element>
 

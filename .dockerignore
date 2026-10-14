@@ -1,0 +1,8 @@
+.git
+.github
+node_modules
+ui/node_modules
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
