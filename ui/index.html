@@ -22,6 +22,7 @@
 
     <link rel="stylesheet" href="/rsms/inter.css" />
 
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo180.png" />
     <link rel="manifest" href="/manifest.json" />
