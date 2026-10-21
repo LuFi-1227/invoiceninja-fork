@@ -59,6 +59,8 @@ class StoreUserRequest extends Request
         }
 
         $rules['language_id'] = 'bail|nullable|sometimes|exists:languages,id';
+        $rules['contact_method'] = 'bail|nullable|sometimes|string|in:whatsapp_and_email,whatsapp,email';
+        $rules['emit_nota_fiscal'] = 'bail|nullable|sometimes|boolean';
 
         return $rules;
     }
@@ -66,6 +68,11 @@ class StoreUserRequest extends Request
     public function prepareForValidation()
     {
         $input = $this->all();
+
+        if ($this->has('forma_de_contato') && !$this->has('contact_method')) {
+            $input['contact_method'] = $this->input('forma_de_contato');
+            $this->merge(['contact_method' => $this->input('forma_de_contato')]);
+        }
 
         if (array_key_exists('email', $input)) {
             $input['email'] = trim($input['email']);

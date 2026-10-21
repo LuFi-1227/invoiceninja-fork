@@ -143,6 +143,31 @@ class UpdateRecurringInvoiceRequest extends Request
      *
      * @return bool
      */
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $assignedUserId = $this->input('assigned_user_id');
+            $user = null;
+
+            if ($assignedUserId) {
+                $user = \App\Models\User::find($assignedUserId);
+            } elseif ($this->recurring_invoice && $this->recurring_invoice->assigned_user_id) {
+                $user = $this->recurring_invoice->assigned_user;
+            } elseif ($this->recurring_invoice && $this->recurring_invoice->user_id) {
+                $user = $this->recurring_invoice->user;
+            } else {
+                $user = auth()->user();
+            }
+
+            if (! $user || ! $user->hasContactMethod()) {
+                $validator->errors()->add(
+                    'assigned_user_id',
+                    ctrans('texts.user_contact_method_required')
+                );
+            }
+        });
+    }
+
     private function setAutoBillFlag($auto_bill): bool
     {
         if ($auto_bill == 'always' || $auto_bill == 'optout') {

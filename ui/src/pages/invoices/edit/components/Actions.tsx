@@ -61,6 +61,7 @@ import { CloneOptionsModal } from '../../common/components/CloneOptionsModal';
 // import { useReverseInvoice } from '../../common/hooks/useReverseInvoice';
 import { EmailInvoiceAction } from '../../common/components/EmailInvoiceAction';
 import { WhatsAppInvoiceAction } from '../../common/components/WhatsAppInvoiceAction';
+import { EmitAsaasNfeAction } from '../../common/components/EmitAsaasNfeAction';
 import { useCancelInvoiceModal } from '../hooks/useCancelInvoiceModal';
 import { useCreatePeppolCreditNote } from '../hooks/useCreatePeppolCreditNote';
 import { useMarkPaid } from '../hooks/useMarkPaid';
@@ -206,6 +207,15 @@ export function useActions(params?: Params) {
       <WhatsAppInvoiceAction
         {...(!dropdown && {
           key: 'whatsapp_invoice',
+        })}
+        invoice={invoice}
+        isDropdown={dropdown}
+      />
+    ),
+    (invoice: Invoice) => (
+      <EmitAsaasNfeAction
+        {...(!dropdown && {
+          key: 'emit_asaas_nfe',
         })}
         invoice={invoice}
         isDropdown={dropdown}

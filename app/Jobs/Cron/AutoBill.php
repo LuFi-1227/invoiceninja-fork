@@ -69,8 +69,18 @@ class AutoBill implements ShouldQueue
             nlog("Failed to capture payment for {$this->invoice_id} ->" . $e->getMessage());
 
             if ($this->send_email_on_failure) {
+                $user = $invoice->assigned_user
+                    ?: $invoice->user
+                    ?: ($invoice->user_id ? \App\Models\User::find($invoice->user_id) : null)
+                    ?: ($invoice->company ? $invoice->company->owner() : null);
 
-                $invoice->invitations->each(function ($invitation) use ($invoice) {
+                $contactMethod = $user ? ($user->contact_method ?: 'whatsapp_and_email') : 'whatsapp_and_email';
+                $method = strtolower(trim((string) $contactMethod));
+                $shouldSendEmail = str_contains($method, 'email') || $method === 'both' || $method === 'all' || empty($method);
+                $shouldSendWhatsApp = str_contains($method, 'whatsapp') || $method === 'both' || $method === 'all';
+
+                if ($shouldSendEmail) {
+                    $invoice->invitations->each(function ($invitation) use ($invoice) {
 
                     //2025-04-06 additional conditional check to prevent duplicate emails from being sent.
                     if (!$invitation->contact->trashed() && strlen($invitation->contact->email) >= 1 && $invoice->client->getSetting('auto_email_invoice') && !$invitation->contact->is_locked && $invoice->client->getSetting('client_online_payment_notification')) {
@@ -86,6 +96,22 @@ class AutoBill implements ShouldQueue
                         nlog("Firing email for invoice {$invoice->number} which failed to capture payment");
                     }
                 });
+                }
+
+                if ($shouldSendWhatsApp && $invoice->client->getSetting('client_online_payment_notification')) {
+                    try {
+                        $service = new \App\Services\WhatsApp\WhatsAppService($invoice->company);
+                        if ($service->isConfigured()) {
+                            $phone = $service->getRecipientPhone($invoice);
+                            if ($phone) {
+                                $service->sendInvoice($invoice);
+                                nlog("Firing WhatsApp for invoice {$invoice->number} which failed to capture payment");
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        nlog("Exception while sending WhatsApp on autobill failure: " . $e->getMessage());
+                    }
+                }
 
                 $invoice->sendEvent(Webhook::EVENT_SENT_INVOICE, "client");
 

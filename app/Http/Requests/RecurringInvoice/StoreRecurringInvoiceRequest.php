@@ -145,6 +145,29 @@ class StoreRecurringInvoiceRequest extends Request
         return false;
     }
 
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $assignedUserId = $this->input('assigned_user_id');
+            $user = null;
+
+            if ($assignedUserId) {
+                $user = \App\Models\User::find($assignedUserId);
+            } elseif ($this->has('user_id') && $this->input('user_id')) {
+                $user = \App\Models\User::find($this->input('user_id'));
+            } else {
+                $user = auth()->user();
+            }
+
+            if (! $user || ! $user->hasContactMethod()) {
+                $validator->errors()->add(
+                    'assigned_user_id',
+                    ctrans('texts.user_contact_method_required')
+                );
+            }
+        });
+    }
+
     public function messages()
     {
         return [];

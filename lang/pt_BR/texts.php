@@ -6375,6 +6375,22 @@ Quando tiver as quantias, volte a esta página de formas de pagamento e clique "
     'total_overdue_tasks' => 'Tarefas atrasadas',
     'total_tasks_due' => 'Tarefas a cumprir',
     'commas_not_allowed' => 'Commas are not allowed',
+    'contact_method' => 'Forma de contato',
+    'contact_method_help' => 'Canal utilizado como guia na cobrança recorrente',
+    'whatsapp_and_email' => 'WhatsApp e E-mail',
+    'only_whatsapp' => 'Só WhatsApp',
+    'only_email' => 'Só E-mail',
+    'user_contact_method_required' => 'O usuário responsável não possui forma de contato definida. Defina a forma de contato antes de criar ou salvar a cobrança recorrente.',
+    'configure_contact_method' => 'Configurar forma de contato',
+    'user_contact_method_missing_warning' => 'Atenção: Não é permitido criar ou salvar cobranças recorrentes para um usuário sem forma de contato definida.',
+    'client_phone_required_for_whatsapp' => 'O cliente selecionado deve possuir um telefone cadastrado para cobranças com envio por WhatsApp.',
+    'client_email_required_for_email' => 'O cliente selecionado deve possuir um e-mail cadastrado para cobranças com envio por E-mail.',
+    'emit_asaas_nfe' => 'Emitir Nota Fiscal (Asaas)',
+    'emit_asaas_nfe_confirm_message' => 'Deseja solicitar a emissão da Nota Fiscal de Serviço (NFS-e) no Asaas para esta fatura? A nota fiscal será enviada automaticamente ao cliente após ser autorizada.',
+    'emit_nfe_automatically' => 'Emitir NFS-e Automaticamente',
+    'municipal_service_code' => 'Código do Serviço Municipal',
+    'emit_nota_fiscal' => 'Emitir Nota Fiscal',
+    'emit_nota_fiscal_help' => 'Emitir Nota Fiscal (Asaas) para cobranças vinculadas a este usuário',
 );
 
 return $lang;

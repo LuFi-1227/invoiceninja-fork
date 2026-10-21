@@ -124,7 +124,7 @@ class SendRecurring implements ShouldQueue
 
             //04-08-2023 edge case to support where online payment notifications are not enabled
             if (!$invoice->client->getSetting('client_online_payment_notification')) {
-                $this->sendRecurringEmails($invoice);
+                $this->sendRecurringNotifications($invoice);
             }
 
             $invoice->sendEvent(Webhook::EVENT_SENT_INVOICE, "client");
@@ -135,13 +135,13 @@ class SendRecurring implements ShouldQueue
 
             //04-08-2023 edge case to support where online payment notifications are not enabled
             if (!$invoice->client->getSetting('client_online_payment_notification')) {
-                $this->sendRecurringEmails($invoice);
+                $this->sendRecurringNotifications($invoice);
             }
 
             $invoice->sendEvent(Webhook::EVENT_SENT_INVOICE, "client");
 
         } elseif ($invoice->client->getSetting('auto_email_invoice')) {
-            $this->sendRecurringEmails($invoice);
+            $this->sendRecurringNotifications($invoice);
             $invoice->sendEvent(Webhook::EVENT_SENT_INVOICE, "client");
         }
 
@@ -154,6 +154,71 @@ class SendRecurring implements ShouldQueue
      * @param Invoice $invoice
      * @return void
      */
+    /**
+     * Sends recurring invoice notifications based on user's contact method (WhatsApp, Email, or Both).
+     *
+     * @param Invoice $invoice
+     * @return void
+     */
+    private function sendRecurringNotifications(Invoice $invoice): void
+    {
+        $user = $this->recurring_invoice->assigned_user
+            ?: $this->recurring_invoice->user
+            ?: ($this->recurring_invoice->user_id ? \App\Models\User::find($this->recurring_invoice->user_id) : null)
+            ?: $invoice->assigned_user
+            ?: $invoice->user
+            ?: ($invoice->user_id ? \App\Models\User::find($invoice->user_id) : null)
+            ?: ($invoice->company ? $invoice->company->owner() : null);
+
+        $contactMethod = $user ? ($user->contact_method ?: 'whatsapp_and_email') : 'whatsapp_and_email';
+        $method = strtolower(trim((string) $contactMethod));
+
+        $shouldSendEmail = str_contains($method, 'email') || $method === 'both' || $method === 'all' || empty($method);
+        $shouldSendWhatsApp = str_contains($method, 'whatsapp') || $method === 'both' || $method === 'all';
+
+        if ($shouldSendEmail) {
+            $this->sendRecurringEmails($invoice);
+        }
+
+        if ($shouldSendWhatsApp) {
+            $this->sendRecurringWhatsApp($invoice);
+        }
+    }
+
+    /**
+     * Sends the recurring invoice via WhatsApp to the client.
+     *
+     * @param Invoice $invoice
+     * @return void
+     */
+    private function sendRecurringWhatsApp(Invoice $invoice): void
+    {
+        try {
+            $service = new \App\Services\WhatsApp\WhatsAppService($invoice->company);
+
+            if (! $service->isConfigured()) {
+                nlog("Skipping recurring WhatsApp for invoice {$invoice->number} - WhatsApp is not configured.");
+                return;
+            }
+
+            $phone = $service->getRecipientPhone($invoice);
+            if (! $phone) {
+                nlog("Skipping recurring WhatsApp for invoice {$invoice->number} - client has no phone registered.");
+                return;
+            }
+
+            nlog("Firing recurring WhatsApp for invoice {$invoice->number} to {$phone}");
+
+            $result = $service->sendInvoice($invoice);
+
+            if (! ($result['success'] ?? false)) {
+                nlog("Failed to send recurring WhatsApp for invoice {$invoice->number}: " . ($result['error'] ?? 'Unknown error'));
+            }
+        } catch (\Throwable $e) {
+            nlog("Exception while sending recurring WhatsApp for invoice {$invoice->number}: " . $e->getMessage());
+        }
+    }
+
     private function sendRecurringEmails(Invoice $invoice): void
     {
         if ($invoice->client->getSetting('skip_automatic_email_with_peppol') && $invoice->client->peppolSendingEnabled()) {

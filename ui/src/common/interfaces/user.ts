@@ -54,6 +54,10 @@ export interface User extends Timestamps {
   oauth_provider_id: string;
   oauth_user_token: string;
   phone: string;
+  contact_method?: string;
+  forma_de_contato?: string;
+  has_contact_method?: boolean;
+  emit_nota_fiscal?: boolean;
   signature: string;
   verified_phone_number: boolean;
   company_user?: CompanyUser;

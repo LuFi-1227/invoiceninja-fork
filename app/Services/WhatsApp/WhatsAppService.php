@@ -430,6 +430,66 @@ class WhatsAppService
     }
 
     /**
+     * Send Nota Fiscal (NFS-e) notification via WhatsApp.
+     */
+    public function sendNotaFiscal(Invoice $invoice, array $nfData, string $paymentMethod = ''): array
+    {
+        if (!$this->isConfigured()) {
+            return [
+                'success' => false,
+                'error' => 'WhatsApp não está configurado para esta empresa.',
+            ];
+        }
+
+        $recipientPhone = $this->getRecipientPhone($invoice);
+        if (empty($recipientPhone)) {
+            return [
+                'success' => false,
+                'error' => 'Nenhum telefone de WhatsApp válido cadastrado para este cliente.',
+            ];
+        }
+
+        $clientName = $invoice->client ? $invoice->client->present()->name() : 'Cliente';
+        $nfNumber = $nfData['number'] ?? '';
+        $pdfUrl = $nfData['pdfUrl'] ?? '';
+        $valueFormatted = number_format((float) ($nfData['value'] ?? $invoice->amount), 2, ',', '.');
+        $validationCode = $nfData['validationCode'] ?? '';
+
+        $message = "Olá, *{$clientName}*!\n\n";
+        $message .= "Sua *Nota Fiscal de Serviço (NFS-e)* referente ao pagamento da Fatura #{$invoice->number} foi emitida com sucesso!\n\n";
+        if ($nfNumber) {
+            $message .= "📄 *Número da NF:* {$nfNumber}\n";
+        }
+        if ($validationCode) {
+            $message .= "🔑 *Código de Verificação:* {$validationCode}\n";
+        }
+        $message .= "💰 *Valor:* R$ {$valueFormatted}\n";
+        if ($paymentMethod) {
+            $message .= "💳 *Forma de Pagamento:* {$paymentMethod}\n";
+        }
+        if ($pdfUrl) {
+            $message .= "\n🔗 *Visualizar / Baixar Nota Fiscal (PDF):*\n{$pdfUrl}\n";
+        }
+
+        // 1. Send text message
+        $result = $this->driver->sendTextMessage($recipientPhone, $message);
+
+        // 2. Send PDF document attachment if URL is available
+        if (!empty($pdfUrl)) {
+            try {
+                $filename = 'Nota_Fiscal_' . ($nfNumber ?: $invoice->number) . '.pdf';
+                $caption = 'Nota Fiscal ' . ($nfNumber ? "Nº {$nfNumber}" : '#' . $invoice->number);
+
+                $this->driver->sendDocument($recipientPhone, $pdfUrl, $filename, $caption);
+            } catch (\Throwable $e) {
+                Log::warning("Could not send Nota Fiscal document attachment on WhatsApp: " . $e->getMessage());
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Send the Asaas Boleto as a document when the company has it enabled.
      */
     protected function sendBoletoIfEnabled(Invoice $invoice, ?string $phone, ?bool $sendBoleto = null): void

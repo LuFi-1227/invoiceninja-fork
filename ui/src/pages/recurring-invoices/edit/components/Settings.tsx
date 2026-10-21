@@ -10,6 +10,9 @@
 
 import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
+import { useCurrentUser } from '$app/common/hooks/useCurrentUser';
+import { useUserQuery } from '$app/common/queries/users';
+import { isUserContactMethodDefined } from '$app/common/helpers/contact-method';
 import { useColorScheme } from '$app/common/colors';
 import { DesignSelector } from '$app/common/generic/DesignSelector';
 import { useHasPermission } from '$app/common/hooks/permissions/useHasPermission';
@@ -31,6 +34,24 @@ export default function Settings() {
 
   const context: RecurringInvoiceContext = useOutletContext();
   const { recurringInvoice, errors, setRecurringInvoice } = context;
+
+  const currentUser = useCurrentUser();
+
+  const assignedUserQuery = useUserQuery({
+    id: recurringInvoice?.assigned_user_id || '',
+    enabled: Boolean(
+      recurringInvoice?.assigned_user_id &&
+        recurringInvoice.assigned_user_id !== currentUser?.id
+    ),
+  });
+
+  const responsibleUser =
+    recurringInvoice?.assigned_user_id &&
+    recurringInvoice.assigned_user_id !== currentUser?.id
+      ? assignedUserQuery.data?.data?.data
+      : currentUser;
+
+  const isContactMethodDefined = isUserContactMethodDefined(responsibleUser);
 
   const handleChange = (
     property: keyof RecurringInvoice,
@@ -92,7 +113,12 @@ export default function Settings() {
                 inputLabel={t('assigned_user')}
                 value={recurringInvoice?.assigned_user_id}
                 onChange={(user) => handleChange('assigned_user_id', user.id)}
-                errorMessage={errors?.errors.assigned_user_id}
+                errorMessage={
+                  errors?.errors?.assigned_user_id ||
+                  (!isContactMethodDefined
+                    ? t('user_contact_method_required')
+                    : undefined)
+                }
                 readonly={!hasPermission('edit_recurring_invoice')}
               />
             </div>

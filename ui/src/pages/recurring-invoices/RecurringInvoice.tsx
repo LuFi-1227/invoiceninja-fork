@@ -12,7 +12,12 @@ import { useAtom, useAtomValue } from 'jotai';
 import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useParams } from 'react-router-dom';
+import { Link, Outlet, useParams } from 'react-router-dom';
+import { Alert } from '$app/components/Alert';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useCurrentUser } from '$app/common/hooks/useCurrentUser';
+import { useUserQuery } from '$app/common/queries/users';
+import { isUserContactMethodDefined } from '$app/common/helpers/contact-method';
 import { v4 } from 'uuid';
 import { refreshEntityDataBannerAtom } from '$app/App';
 import { RecurringInvoiceStatus } from '$app/common/enums/recurring-invoice-status';
@@ -83,6 +88,24 @@ export default function RecurringInvoice() {
 
   const { calculateInvoiceSum } = useRecurringInvoiceUtilities({ client });
 
+  const currentUser = useCurrentUser();
+
+  const assignedUserQuery = useUserQuery({
+    id: recurringInvoice?.assigned_user_id || '',
+    enabled: Boolean(
+      recurringInvoice?.assigned_user_id &&
+        recurringInvoice.assigned_user_id !== currentUser?.id
+    ),
+  });
+
+  const responsibleUser =
+    recurringInvoice?.assigned_user_id &&
+    recurringInvoice.assigned_user_id !== currentUser?.id
+      ? assignedUserQuery.data?.data?.data
+      : currentUser;
+
+  const isContactMethodDefined = isUserContactMethodDefined(responsibleUser);
+
   const { validationResponse } = useCheckEInvoiceValidation({
     entity: 'recurring_invoice',
     resource: recurringInvoice,
@@ -124,11 +147,20 @@ export default function RecurringInvoice() {
           navigationTopRight: (
             <ResourceActions
               resource={recurringInvoice}
-              onSaveClick={() => save(recurringInvoice as RecurringInvoiceType)}
+              onSaveClick={() => {
+                if (!isContactMethodDefined) {
+                  toast.error(
+                    t('user_contact_method_required') ||
+                      'O usuário responsável não possui forma de contato definida.'
+                  );
+                  return;
+                }
+                save(recurringInvoice as RecurringInvoiceType);
+              }}
               // label={t('more_actions')}
               actions={actions}
               cypressRef="recurringInvoiceActionDropdown"
-              disableSaveButton={isFormBusy}
+              disableSaveButton={isFormBusy || !isContactMethodDefined}
             />
           ),
         })}
@@ -143,6 +175,19 @@ export default function RecurringInvoice() {
     >
       {recurringInvoice?.id === id ? (
         <div className="space-y-4">
+          {!isContactMethodDefined && (
+            <Alert type="warning" disableClosing className="mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span>{t('user_contact_method_required')}</span>
+                <Link
+                  to="/settings/user_details"
+                  className="underline font-semibold hover:opacity-80 whitespace-nowrap"
+                >
+                  {t('configure_contact_method')}
+                </Link>
+              </div>
+            </Alert>
+          )}
           <Tabs
             tabs={tabs}
             rightSide={
@@ -177,9 +222,16 @@ export default function RecurringInvoice() {
 
       {recurringInvoice?.status_id === RecurringInvoiceStatus.DRAFT ? (
         <ConfirmActionModal
-          onClick={() =>
-            save(recurringInvoice as RecurringInvoiceType, 'send_now')
-          }
+          onClick={() => {
+            if (!isContactMethodDefined) {
+              toast.error(
+                t('user_contact_method_required') ||
+                  'O usuário responsável não possui forma de contato definida.'
+              );
+              return;
+            }
+            save(recurringInvoice as RecurringInvoiceType, 'send_now');
+          }}
         />
       ) : null}
     </Default>
