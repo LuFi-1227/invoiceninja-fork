@@ -153,6 +153,7 @@ class ClientTransformer extends EntityTransformer
             'contact_method' => (string) ($client->contact_method ?: ''),
             'forma_de_contato' => (string) ($client->contact_method ?: ''),
             'has_contact_method' => $client->hasContactMethod(),
+            'emit_nota_fiscal' => method_exists($client, 'shouldEmitNotaFiscal') ? $client->shouldEmitNotaFiscal() : (bool) ($client->emit_nota_fiscal ?? true),
             'city' => $client->city ?: '',
             'state' => $client->state ?: '',
             'postal_code' => $client->postal_code ?: '',

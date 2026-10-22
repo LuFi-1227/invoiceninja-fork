@@ -94,6 +94,11 @@ class AsaasNotaFiscalService
                     return null;
                 }
 
+                if ($invoice->client && method_exists($invoice->client, 'shouldEmitNotaFiscal') && !$invoice->client->shouldEmitNotaFiscal()) {
+                    Log::info("Asaas automatic NFS-e emission skipped for invoice {$invoice->id}: client {$invoice->client->id} has emit_nota_fiscal disabled.");
+                    return null;
+                }
+
                 $user = $invoice->assigned_user
                     ?: $invoice->user
                     ?: ($invoice->user_id ? \App\Models\User::find($invoice->user_id) : null);
@@ -179,6 +184,11 @@ class AsaasNotaFiscalService
                 SystemLog::TYPE_ASAAS,
                 $invoice->client,
                 $invoice->company,
+            );
+
+            $this->createInvoiceActivity(
+                $invoice,
+                "⚠️ Falha ao solicitar emissão da Nota Fiscal no Asaas: " . $e->getMessage()
             );
 
             return null;

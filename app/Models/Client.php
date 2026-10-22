@@ -52,6 +52,7 @@ use Laracasts\Presenter\PresentableTrait;
  * @property string|null $logo
  * @property string|null $phone
  * @property string|null $contact_method
+ * @property bool $emit_nota_fiscal
  * @property string|null $routing_id
  * @property float $balance
  * @property float $paid_to_date
@@ -194,6 +195,7 @@ class Client extends BaseModel implements HasLocalePreference
         'public_notes',
         'phone',
         'contact_method',
+        'emit_nota_fiscal',
         'number',
         'routing_id',
         'is_tax_exempt',
@@ -209,6 +211,7 @@ class Client extends BaseModel implements HasLocalePreference
 
     protected $casts = [
         'is_deleted' => 'boolean',
+        'emit_nota_fiscal' => 'boolean',
         'country_id' => 'string',
         'settings' => 'object',
         'updated_at' => 'timestamp',
@@ -251,8 +254,14 @@ class Client extends BaseModel implements HasLocalePreference
         'public_notes',
         'phone',
         'contact_method',
+        'emit_nota_fiscal',
         'routing_id',
     ];
+
+    public function shouldEmitNotaFiscal(): bool
+    {
+        return $this->emit_nota_fiscal !== false && $this->emit_nota_fiscal !== 0 && $this->emit_nota_fiscal !== '0';
+    }
 
     public function hasContactMethod(): bool
     {

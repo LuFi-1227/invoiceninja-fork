@@ -178,6 +178,21 @@ export function Details(props: Props) {
         </SelectField>
       </Element>
 
+      <Element
+        leftSide={t('emit_nota_fiscal') || 'Emitir Nota Fiscal'}
+        leftSideHelp={
+          t('emit_nota_fiscal_client_help') ||
+          'Emitir Nota Fiscal (Asaas) para cobranças deste cliente'
+        }
+      >
+        <Toggle
+          checked={props.client?.emit_nota_fiscal ?? true}
+          onValueChange={(value) =>
+            handleCustomFieldChange('emit_nota_fiscal', value)
+          }
+        />
+      </Element>
+
       <Element leftSide={t('routing_id')}>
         <InputField
           value={props.client?.routing_id || ''}

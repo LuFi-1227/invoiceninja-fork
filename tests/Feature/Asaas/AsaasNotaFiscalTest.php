@@ -261,4 +261,15 @@ class AsaasNotaFiscalTest extends TestCase
 
         $this->assertNull($response);
     }
+
+    public function test_automatic_nota_fiscal_skipped_when_client_has_emission_disabled(): void
+    {
+        $this->client->emit_nota_fiscal = false;
+        $this->client->save();
+
+        $service = new AsaasNotaFiscalService($this->gateway);
+        $response = $service->requestInvoiceForPayment($this->invoice->fresh(), 'pay_skip_client_123', 100.0, 'cus_123');
+
+        $this->assertNull($response);
+    }
 }

@@ -30,6 +30,7 @@ import { CountrySelector } from '$app/components/CountrySelector';
 import { CurrencySelector } from '$app/components/CurrencySelector';
 import { Button, InputField, SelectField } from '$app/components/forms';
 import { NumberInputField } from '$app/components/forms/NumberInputField';
+import Toggle from '$app/components/forms/Toggle';
 import { GroupSettingsSelector } from '$app/components/GroupSettingsSelector';
 import { LanguageSelector } from '$app/components/LanguageSelector';
 import { Modal } from '$app/components/Modal';
@@ -67,7 +68,10 @@ export function ClientCreate({
 
   const { data: paymentTermsResponse } = usePaymentTermsQuery({});
 
-  const handleChange = (property: keyof Client, value: string) => {
+  const handleChange = (
+    property: keyof Client,
+    value: string | number | boolean
+  ) => {
     setErrors(undefined);
 
     setClient((client) => client && set({ ...client }, property, value));
@@ -172,6 +176,7 @@ export function ClientCreate({
       setClient({
         ...blankClient,
         contact_method: blankClient.contact_method || 'whatsapp_and_email',
+        emit_nota_fiscal: blankClient.emit_nota_fiscal ?? true,
       });
     }
   }, [blankClient, isModalOpen]);
@@ -259,6 +264,14 @@ export function ClientCreate({
                   {t('only_email') || 'Só E-mail'}
                 </option>
               </SelectField>
+
+              <Toggle
+                label={t('emit_nota_fiscal') || 'Emitir Nota Fiscal'}
+                checked={client?.emit_nota_fiscal ?? true}
+                onValueChange={(value) =>
+                  handleChange('emit_nota_fiscal', value)
+                }
+              />
 
               <CurrencySelector
                 label={t('currency')}

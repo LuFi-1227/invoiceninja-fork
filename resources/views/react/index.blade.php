@@ -28,7 +28,7 @@
     <link rel="shortcut icon" href="/favicon.ico?v=gestoremio" />
     <link rel="apple-touch-icon" href="/logo180.png?v=gestoremio" />
     <link rel="manifest" href="/manifest.json" />
-    <script type="module" crossorigin src="/bundle.BXcw705_.js"></script>
+    <script type="module" crossorigin src="/bundle.BgTB1Ho2.js"></script>
     <link rel="modulepreload" crossorigin href="/rolldown-runtime-CNC7AqOf.js">
     <link rel="modulepreload" crossorigin href="/react-Augu_vA3.js">
     <link rel="modulepreload" crossorigin href="/jsx-runtime-CTknu7_t.js">
@@ -95,7 +95,7 @@
     <link rel="modulepreload" crossorigin href="/CurrencySelector-9rtr2LVk.js">
     <link rel="modulepreload" crossorigin href="/group-settings-4EkxwswJ.js">
     <link rel="modulepreload" crossorigin href="/TabGroup-DWLDdmCH.js">
-    <link rel="modulepreload" crossorigin href="/ClientSelector-CrmG5q0o.js">
+    <link rel="modulepreload" crossorigin href="/ClientSelector-D5H-8QKm.js">
     <link rel="modulepreload" crossorigin href="/Container-Bf-jzwyj.js">
     <link rel="modulepreload" crossorigin href="/hooks-oMyUfggx.js">
     <link rel="modulepreload" crossorigin href="/company-gateways-CNMkosKt.js">
@@ -141,7 +141,7 @@
     <link rel="modulepreload" crossorigin href="/TaxDataModal-BBGiG_M5.js">
     <link rel="modulepreload" crossorigin href="/GridDotsVertical-mjBswrUX.js">
     <link rel="modulepreload" crossorigin href="/projects-C75Pacv2.js">
-    <link rel="modulepreload" crossorigin href="/ProjectSelector-DeKQCQPx.js">
+    <link rel="modulepreload" crossorigin href="/ProjectSelector-CFEEmFhF.js">
     <link rel="modulepreload" crossorigin href="/relativeTime-CCBsD5LK.js">
     <link rel="modulepreload" crossorigin href="/useStop-DvDMgAab.js">
     <link rel="modulepreload" crossorigin href="/frequency-DGZXu__Z.js">
@@ -156,7 +156,7 @@
     <link rel="modulepreload" crossorigin href="/dist-ItKxkH-G.js">
     <link rel="modulepreload" crossorigin href="/editor.api-D67F9Akq.js">
     <link rel="modulepreload" crossorigin href="/monaco.contribution-GvmOpcHO.js">
-    <link rel="modulepreload" crossorigin href="/src-BXo3MmNJ.js">
+    <link rel="modulepreload" crossorigin href="/src-DrDXWBjq.js">
     <link rel="stylesheet" crossorigin href="/forms-CZOhJl4e.css">
     <link rel="stylesheet" crossorigin href="/editor-BjLDz43t.css">
     <link rel="stylesheet" crossorigin href="/src-CoKrfv_T.css">

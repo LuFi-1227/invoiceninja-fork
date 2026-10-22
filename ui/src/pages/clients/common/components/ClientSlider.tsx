@@ -257,10 +257,12 @@ export function ClientSlider() {
 
             {Boolean(client.contact_method) && (
               <Element
+                className="border-b border-dashed"
                 leftSide={t('contact_method') || 'Forma de contato'}
                 withoutWrappingLeftSide
                 pushContentToRight
                 noExternalPadding
+                style={{ borderColor: colors.$20 }}
               >
                 {client.contact_method === 'whatsapp'
                   ? t('only_whatsapp') || 'Só WhatsApp'
@@ -269,6 +271,17 @@ export function ClientSlider() {
                     : t('whatsapp_and_email') || 'WhatsApp e E-mail'}
               </Element>
             )}
+
+            <Element
+              leftSide={t('emit_nota_fiscal') || 'Emitir Nota Fiscal'}
+              withoutWrappingLeftSide
+              pushContentToRight
+              noExternalPadding
+            >
+              {client.emit_nota_fiscal !== false
+                ? t('yes') || 'Sim'
+                : t('no') || 'Não'}
+            </Element>
           </div>
 
           {Boolean(
