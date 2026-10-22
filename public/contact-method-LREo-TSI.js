@@ -1,0 +1,1 @@
+var e=[`whatsapp_and_email`,`whatsapp`,`email`,`both`,`all`];function t(t){if(!t)return!1;if(typeof t.has_contact_method==`boolean`)return t.has_contact_method;let n=(t.contact_method||t.forma_de_contato||``).toString().trim().toLowerCase();return e.includes(n)}export{t};
