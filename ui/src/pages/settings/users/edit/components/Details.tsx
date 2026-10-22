@@ -14,7 +14,7 @@ import { User } from '$app/common/interfaces/user';
 import { ValidationBag } from '$app/common/interfaces/validation-bag';
 import { CustomField } from '$app/components/CustomField';
 import { Element } from '$app/components/cards';
-import { InputField } from '$app/components/forms';
+import { InputField, SelectField } from '$app/components/forms';
 import Toggle from '$app/components/forms/Toggle';
 
 interface Props {
@@ -60,6 +60,30 @@ export function Details(props: Props) {
         />
       </Element>
 
+      <Element
+        leftSide={t('contact_method') || 'Forma de contato'}
+        leftSideHelp={
+          t('contact_method_help') ||
+          'Canal utilizado como guia na cobrança recorrente'
+        }
+      >
+        <SelectField
+          value={user?.contact_method || 'whatsapp_and_email'}
+          onValueChange={(value) => onChange('contact_method', value)}
+          errorMessage={props.errors?.errors.contact_method}
+        >
+          <option value="whatsapp_and_email">
+            {t('whatsapp_and_email') || 'WhatsApp e E-mail'}
+          </option>
+          <option value="whatsapp">
+            {t('only_whatsapp') || 'Só WhatsApp'}
+          </option>
+          <option value="email">
+            {t('only_email') || 'Só E-mail'}
+          </option>
+        </SelectField>
+      </Element>
+
       <Element leftSide={t('phone')}>
         <InputField
           value={user?.phone}
@@ -75,6 +99,19 @@ export function Details(props: Props) {
         <Toggle
           checked={user?.user_logged_in_notification}
           onChange={(value) => onChange('user_logged_in_notification', value)}
+        />
+      </Element>
+
+      <Element
+        leftSide={t('emit_nota_fiscal') || 'Emitir Nota Fiscal'}
+        leftSideHelp={
+          t('emit_nota_fiscal_help') ||
+          'Emitir Nota Fiscal (Asaas) para cobranças vinculadas a este usuário'
+        }
+      >
+        <Toggle
+          checked={user?.emit_nota_fiscal ?? true}
+          onChange={(value) => onChange('emit_nota_fiscal', value)}
         />
       </Element>
 

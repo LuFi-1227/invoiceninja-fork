@@ -21,7 +21,8 @@ import { CustomField } from '$app/components/CustomField';
 import { MarkdownEditor } from '$app/components/forms/MarkdownEditor';
 import { LanguageSelector } from '$app/components/LanguageSelector';
 import { Element } from '../../../../components/cards';
-import { InputField } from '../../../../components/forms';
+import { InputField, SelectField } from '../../../../components/forms';
+import Toggle from '$app/components/forms/Toggle';
 import { hasLanguageChanged } from '../../localization/common/atoms';
 
 export function Details() {
@@ -94,6 +95,49 @@ export function Details() {
               value={userChanges?.phone || user?.phone || ''}
               onValueChange={(value) => handleChange('phone', value)}
               errorMessage={(errors?.errors?.phone ?? [])[0]}
+            />
+          </Element>
+
+          <Element
+            leftSide={t('contact_method') || 'Forma de contato'}
+            leftSideHelp={
+              t('contact_method_help') ||
+              'Canal utilizado como guia na cobrança recorrente'
+            }
+          >
+            <SelectField
+              value={
+                userChanges?.contact_method ||
+                user?.contact_method ||
+                'whatsapp_and_email'
+              }
+              onValueChange={(value) => handleChange('contact_method', value)}
+              errorMessage={(errors?.errors?.contact_method ?? [])[0]}
+            >
+              <option value="whatsapp_and_email">
+                {t('whatsapp_and_email') || 'WhatsApp e E-mail'}
+              </option>
+              <option value="whatsapp">
+                {t('only_whatsapp') || 'Só WhatsApp'}
+              </option>
+              <option value="email">
+                {t('only_email') || 'Só E-mail'}
+              </option>
+            </SelectField>
+          </Element>
+
+          <Element
+            leftSide={t('emit_nota_fiscal') || 'Emitir Nota Fiscal'}
+            leftSideHelp={
+              t('emit_nota_fiscal_help') ||
+              'Emitir Nota Fiscal (Asaas) para cobranças vinculadas a este usuário'
+            }
+          >
+            <Toggle
+              checked={
+                userChanges?.emit_nota_fiscal ?? user?.emit_nota_fiscal ?? true
+              }
+              onChange={(value) => handleChange('emit_nota_fiscal', value)}
             />
           </Element>
 

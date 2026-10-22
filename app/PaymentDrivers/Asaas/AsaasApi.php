@@ -249,6 +249,35 @@ class AsaasApi
     }
 
     /**
+     * Create / schedule a municipal service invoice (NFS-e) in Asaas.
+     */
+    public function createInvoice(array $invoiceData): array
+    {
+        $response = $this->client()->post($this->baseUrl . '/invoices', $invoiceData);
+
+        if (!$response->successful()) {
+            $errorMsg = $response->json('errors.0.description') ?? $response->body();
+            throw new \Exception('Asaas invoice creation failed: ' . $errorMsg);
+        }
+
+        return (array) $response->json();
+    }
+
+    /**
+     * Retrieve invoice (NFS-e) details from Asaas.
+     */
+    public function getInvoice(string $invoiceId): array
+    {
+        $response = $this->client()->get($this->baseUrl . '/invoices/' . $invoiceId);
+
+        if (!$response->successful()) {
+            throw new \Exception('Asaas getInvoice failed: ' . $response->body());
+        }
+
+        return (array) $response->json();
+    }
+
+    /**
      * Validate incoming webhook token header.
      */
     public function validateWebhookToken(?string $receivedToken): bool

@@ -14,7 +14,12 @@ import { cloneDeep } from 'lodash';
 import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdNotStarted, MdSend } from 'react-icons/md';
-import { Outlet, useSearchParams } from 'react-router-dom';
+import { Link, Outlet, useSearchParams } from 'react-router-dom';
+import { Alert } from '$app/components/Alert';
+import { toast } from '$app/common/helpers/toast/toast';
+import { useCurrentUser } from '$app/common/hooks/useCurrentUser';
+import { useUserQuery } from '$app/common/queries/users';
+import { isUserContactMethodDefined } from '$app/common/helpers/contact-method';
 import { blankInvitation } from '$app/common/constants/blank-invitation';
 import { InvoiceSum } from '$app/common/helpers/invoices/invoice-sum';
 import { InvoiceSumInclusive } from '$app/common/helpers/invoices/invoice-sum-inclusive';
@@ -57,6 +62,24 @@ export default function Create() {
 
   const [invoiceSum] = useAtom(invoiceSumAtom);
   const [recurringInvoice, setRecurringInvoice] = useAtom(recurringInvoiceAtom);
+
+  const currentUser = useCurrentUser();
+
+  const assignedUserQuery = useUserQuery({
+    id: recurringInvoice?.assigned_user_id || '',
+    enabled: Boolean(
+      recurringInvoice?.assigned_user_id &&
+        recurringInvoice.assigned_user_id !== currentUser?.id
+    ),
+  });
+
+  const responsibleUser =
+    recurringInvoice?.assigned_user_id &&
+    recurringInvoice.assigned_user_id !== currentUser?.id
+      ? assignedUserQuery.data?.data?.data
+      : currentUser;
+
+  const isContactMethodDefined = isUserContactMethodDefined(responsibleUser);
 
   const { data, isLoading } = useBlankRecurringInvoiceQuery({
     enabled: typeof recurringInvoice === 'undefined',
@@ -227,12 +250,30 @@ export default function Create() {
 
   const saveOptions: SaveOption[] = [
     {
-      onClick: () => setIsConfirmationVisible(true),
+      onClick: () => {
+        if (!isContactMethodDefined) {
+          toast.error(
+            t('user_contact_method_required') ||
+              'O usuário responsável não possui forma de contato definida.'
+          );
+          return;
+        }
+        setIsConfirmationVisible(true);
+      },
       label: t('send_now'),
       icon: <Icon element={MdSend} />,
     },
     {
-      onClick: () => save(recurringInvoice as RecurringInvoice, 'start'),
+      onClick: () => {
+        if (!isContactMethodDefined) {
+          toast.error(
+            t('user_contact_method_required') ||
+              'O usuário responsável não possui forma de contato definida.'
+          );
+          return;
+        }
+        save(recurringInvoice as RecurringInvoice, 'start');
+      },
       label: t('start'),
       icon: <Icon element={MdNotStarted} />,
     },
@@ -242,12 +283,37 @@ export default function Create() {
     <Default
       title={documentTitle}
       breadcrumbs={pages}
-      disableSaveButton={!recurringInvoice?.client_id || isFormBusy}
-      onSaveClick={() => save(recurringInvoice as RecurringInvoice)}
+      disableSaveButton={
+        !recurringInvoice?.client_id || isFormBusy || !isContactMethodDefined
+      }
+      onSaveClick={() => {
+        if (!isContactMethodDefined) {
+          toast.error(
+            t('user_contact_method_required') ||
+              'O usuário responsável não possui forma de contato definida.'
+          );
+          return;
+        }
+        save(recurringInvoice as RecurringInvoice);
+      }}
       additionalSaveOptions={saveOptions}
     >
       {!isLoading ? (
         <div className="space-y-4">
+          {!isContactMethodDefined && (
+            <Alert type="warning" disableClosing className="mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span>{t('user_contact_method_required')}</span>
+                <Link
+                  to="/settings/user_details"
+                  className="underline font-semibold hover:opacity-80 whitespace-nowrap"
+                >
+                  {t('configure_contact_method')}
+                </Link>
+              </div>
+            </Alert>
+          )}
+
           <Tabs tabs={tabs} />
 
           <Outlet

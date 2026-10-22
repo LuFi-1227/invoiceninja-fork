@@ -336,6 +336,7 @@ Route::group(['middleware' => ['throttle:api', 'token_auth', 'valid_json','local
     Route::get('invoices/{invoice}/whatsapp/options', [WhatsAppController::class, 'getSendOptions'])->name('invoices.whatsapp.options');
     Route::get('invoices/{invoice}/whatsapp/pdf', [WhatsAppController::class, 'showInvoicePdf'])->name('invoices.whatsapp.pdf');
     Route::get('invoices/{invoice}/whatsapp/boleto', [WhatsAppController::class, 'showBoletoPdf'])->name('invoices.whatsapp.boleto');
+    Route::post('invoices/{invoice}/emit_asaas_nfe', [InvoiceController::class, 'emitAsaasNotaFiscal'])->name('invoices.emit_asaas_nfe');
 
     Route::resource('locations', LocationController::class); // name = (locations. index / create / show / update / destroy / edit
     Route::post('locations/bulk', [LocationController::class, 'bulk'])->name('locations.bulk');

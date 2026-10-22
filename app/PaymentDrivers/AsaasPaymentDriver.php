@@ -219,8 +219,27 @@ class AsaasPaymentDriver extends BaseDriver
         $payload = $request->all();
         $event = $payload['event'] ?? '';
         $paymentData = $payload['payment'] ?? [];
+        $invoiceData = $payload['invoice'] ?? [];
 
-        Log::info("Asaas webhook received: event={$event}, paymentId=" . ($paymentData['id'] ?? ''));
+        Log::info("Asaas webhook received: event={$event}, paymentId=" . ($paymentData['id'] ?? '') . ", invoiceId=" . ($invoiceData['id'] ?? ''));
+
+        // Handle Asaas Nota Fiscal (NFS-e) webhook events
+        if ($event === 'INVOICE_AUTHORIZED' || $event === 'INVOICE_ERROR' || !empty($invoiceData['id'])) {
+            $nfService = new \App\Services\Asaas\AsaasNotaFiscalService($this->company_gateway);
+
+            if ($event === 'INVOICE_AUTHORIZED') {
+                $result = $nfService->handleInvoiceAuthorizedWebhook($invoiceData);
+                return response()->json(['status' => 'ok', 'result' => $result], 200);
+            }
+
+            if ($event === 'INVOICE_ERROR') {
+                $result = $nfService->handleInvoiceErrorWebhook($invoiceData);
+                return response()->json(['status' => 'ok', 'result' => $result], 200);
+            }
+
+            Log::info("Asaas invoice event {$event} acknowledged for {$invoiceData['id']}");
+            return response()->json(['status' => 'ok', 'message' => "Invoice event {$event} received"], 200);
+        }
 
         if (empty($paymentData['id'])) {
             return response()->json(['error' => 'Missing payment data'], 400);
@@ -291,6 +310,24 @@ class AsaasPaymentDriver extends BaseDriver
                     );
 
                     Log::info("Asaas payment recorded successfully: ID {$payment->id} for {$transactionId}");
+                }
+
+                // Automatically request Nota Fiscal (NFS-e) emission in Asaas upon payment confirmation
+                try {
+                    $nfService = new \App\Services\Asaas\AsaasNotaFiscalService($this->company_gateway);
+                    $nfResponse = $nfService->requestInvoiceForPayment(
+                        $invoice,
+                        $transactionId,
+                        (float) ($paymentData['value'] ?? ($paymentHash->data->amount_with_fee ?? $invoice->amount)),
+                        $paymentData['customer'] ?? null
+                    );
+
+                    // If Asaas immediately authorized the invoice with pdfUrl:
+                    if ($nfResponse && ($nfResponse['status'] ?? '') === 'AUTHORIZED' && !empty($nfResponse['pdfUrl'])) {
+                        $nfService->sendNotaFiscalToClient($invoice, $nfResponse, $paymentData['billingType'] ?? 'PIX');
+                    }
+                } catch (\Throwable $e) {
+                    Log::error("Asaas Nota Fiscal request failed for invoice {$invoice->id}, payment {$transactionId}: " . $e->getMessage());
                 }
             }
         } elseif (in_array($event, ['PAYMENT_REFUNDED'])) {

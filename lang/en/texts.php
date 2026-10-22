@@ -6373,6 +6373,22 @@ $lang = array(
     'estimated_hours' => 'Estimated Hours',
     'unestimated_tasks' => 'Unestimated Tasks',
     'tasks_over_estimate' => 'Tasks Over Estimate',
+    'contact_method' => 'Contact method',
+    'contact_method_help' => 'Channel used as a guide in recurring billing',
+    'whatsapp_and_email' => 'WhatsApp and Email',
+    'only_whatsapp' => 'Only WhatsApp',
+    'only_email' => 'Only Email',
+    'user_contact_method_required' => 'The responsible user does not have a contact method defined. Please define a contact method before creating or saving a recurring invoice.',
+    'configure_contact_method' => 'Configure contact method',
+    'user_contact_method_missing_warning' => 'Warning: Creating or saving a recurring invoice requires the responsible user to have a defined contact method.',
+    'client_phone_required_for_whatsapp' => 'The selected client must have a phone number for recurring billing with WhatsApp notifications.',
+    'client_email_required_for_email' => 'The selected client must have an email address for recurring billing with Email notifications.',
+    'emit_asaas_nfe' => 'Issue Invoice (Asaas)',
+    'emit_asaas_nfe_confirm_message' => 'Do you want to request the issuance of the Service Invoice (NFS-e) in Asaas for this invoice? The invoice will be automatically sent to the client once authorized.',
+    'emit_nfe_automatically' => 'Issue NFS-e Automatically',
+    'municipal_service_code' => 'Municipal Service Code',
+    'emit_nota_fiscal' => 'Issue Invoice (NFS-e)',
+    'emit_nota_fiscal_help' => 'Issue Nota Fiscal (Asaas) for invoices assigned to this user',
 );
 
 return $lang;

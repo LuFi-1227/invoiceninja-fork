@@ -62,6 +62,9 @@ export function Create() {
   useEffect(() => {
     setUser({
       ...response?.data.data,
+      contact_method:
+        response?.data.data?.contact_method || 'whatsapp_and_email',
+      emit_nota_fiscal: response?.data.data?.emit_nota_fiscal ?? true,
       company_user: {
         permissions: '',
         notifications: {

@@ -890,6 +890,22 @@ class InvoiceController extends BaseController
                 }
                 break;
 
+            case 'emit_asaas_nfe':
+                $service = \App\Services\Asaas\AsaasNotaFiscalService::forInvoice($invoice);
+                if (!$service) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Gateway Asaas não configurado para esta empresa.',
+                    ], 400);
+                }
+
+                $result = $service->emitNotaFiscalManually($invoice);
+
+                if (! $bulk) {
+                    return response()->json($result, ($result['success'] ?? false) ? 200 : 400);
+                }
+                break;
+
             default:
                 return response()->json(['message' => ctrans('texts.action_unavailable', ['action' => $action])], 400);
         }
@@ -1210,5 +1226,26 @@ class InvoiceController extends BaseController
         $invoice->save();
 
         return $this->itemResponse($invoice->fresh());
+    }
+
+    /**
+     * emitAsaasNotaFiscal
+     *
+     * @param Invoice $invoice
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function emitAsaasNotaFiscal(Invoice $invoice)
+    {
+        $service = \App\Services\Asaas\AsaasNotaFiscalService::forInvoice($invoice);
+        if (!$service) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gateway Asaas não configurado para esta empresa.',
+            ], 400);
+        }
+
+        $result = $service->emitNotaFiscalManually($invoice);
+
+        return response()->json($result, ($result['success'] ?? false) ? 200 : 400);
     }
 }

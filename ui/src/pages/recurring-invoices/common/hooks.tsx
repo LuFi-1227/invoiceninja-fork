@@ -267,8 +267,16 @@ export function useSave(props: RecurringInvoiceSaveProps) {
         if (error.response?.status === 422) {
           const errorMessages = error.response.data;
 
-          if (errorMessages.errors.amount) {
-            toast.error(errorMessages.errors.amount[0]);
+          const assignedUserError = errorMessages?.errors?.assigned_user_id?.[0];
+          const amountError = errorMessages?.errors?.amount?.[0];
+          const generalMessage = errorMessages?.message;
+
+          if (assignedUserError) {
+            toast.error(assignedUserError);
+          } else if (amountError) {
+            toast.error(amountError);
+          } else if (generalMessage) {
+            toast.error(generalMessage);
           } else {
             toast.dismiss();
           }
@@ -578,8 +586,16 @@ export function useCreate({
         if (error.response?.status === 422) {
           const errorMessages = error.response.data;
 
-          if (errorMessages.errors.amount) {
-            toast.error(errorMessages.errors.amount[0]);
+          const assignedUserError = errorMessages?.errors?.assigned_user_id?.[0];
+          const amountError = errorMessages?.errors?.amount?.[0];
+          const generalMessage = errorMessages?.message;
+
+          if (assignedUserError) {
+            toast.error(assignedUserError);
+          } else if (amountError) {
+            toast.error(amountError);
+          } else if (generalMessage) {
+            toast.error(generalMessage);
           } else {
             toast.dismiss();
           }

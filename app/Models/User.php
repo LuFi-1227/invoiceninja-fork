@@ -46,6 +46,8 @@ use Laracasts\Presenter\PresentableTrait;
  * @property string|null $first_name
  * @property string|null $last_name
  * @property string|null $phone
+ * @property string|null $contact_method
+ * @property bool $emit_nota_fiscal
  * @property string|null $ip
  * @property string|null $device_token
  * @property string $email
@@ -157,6 +159,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'last_name',
         'email',
         'phone',
+        'contact_method',
+        'emit_nota_fiscal',
         'signature',
         'avatar',
         'accepted_terms_version',
@@ -188,6 +192,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $casts = [
         'oauth_user_token' => 'object',
+        'emit_nota_fiscal' => 'boolean',
         'settings'         => UserSettingsCast::class,
         'updated_at'       => 'timestamp',
         'created_at'       => 'timestamp',
@@ -200,6 +205,45 @@ class User extends Authenticatable implements MustVerifyEmail
     public function name()
     {
         return $this->first_name . ' ' . $this->last_name;
+    }
+
+    public function hasContactMethod(): bool
+    {
+        $method = strtolower(trim((string) ($this->contact_method ?? '')));
+        return in_array($method, ['whatsapp_and_email', 'whatsapp', 'email', 'both', 'all']);
+    }
+
+    public function hasWhatsAppContact(): bool
+    {
+        if (! $this->hasContactMethod()) {
+            return false;
+        }
+        $method = strtolower(trim((string) $this->contact_method));
+        return str_contains($method, 'whatsapp') || $method === 'both' || $method === 'all';
+    }
+
+    public function hasEmailContact(): bool
+    {
+        if (! $this->hasContactMethod()) {
+            return false;
+        }
+        $method = strtolower(trim((string) $this->contact_method));
+        return str_contains($method, 'email') || $method === 'both' || $method === 'all';
+    }
+
+    public function shouldEmitNotaFiscal(): bool
+    {
+        return $this->emit_nota_fiscal !== false && $this->emit_nota_fiscal !== 0 && $this->emit_nota_fiscal !== '0';
+    }
+
+    public function setFormaDeContatoAttribute($value): void
+    {
+        $this->attributes['contact_method'] = $value;
+    }
+
+    public function getFormaDeContatoAttribute(): ?string
+    {
+        return $this->attributes['contact_method'] ?? null;
     }
 
     public function getEntityType()

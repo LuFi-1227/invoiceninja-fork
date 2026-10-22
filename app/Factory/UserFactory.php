@@ -25,6 +25,8 @@ class UserFactory
         $user->first_name = '';
         $user->last_name = '';
         $user->phone = '';
+        $user->contact_method = 'whatsapp_and_email';
+        $user->emit_nota_fiscal = true;
         $user->email = '';
         $user->last_login = null;
         $user->failed_logins = 0;
