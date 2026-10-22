@@ -52,7 +52,6 @@ export function EmitAsaasNfeAction(props: Props) {
         toast.success(response.data?.message ?? t('success'));
         setIsModalOpen(false);
         $refetch(['invoices']);
-        $refetch(['/api/v1/invoices']);
       })
       .catch((error: AxiosError<{ message?: string; error?: string }>) => {
         const errorMsg =
