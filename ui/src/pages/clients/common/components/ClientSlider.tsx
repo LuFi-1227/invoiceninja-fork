@@ -244,12 +244,29 @@ export function ClientSlider() {
 
             {Boolean(client.phone) && (
               <Element
+                className="border-b border-dashed"
                 leftSide={t('phone')}
                 withoutWrappingLeftSide
                 pushContentToRight
                 noExternalPadding
+                style={{ borderColor: colors.$20 }}
               >
                 {client.phone}
+              </Element>
+            )}
+
+            {Boolean(client.contact_method) && (
+              <Element
+                leftSide={t('contact_method') || 'Forma de contato'}
+                withoutWrappingLeftSide
+                pushContentToRight
+                noExternalPadding
+              >
+                {client.contact_method === 'whatsapp'
+                  ? t('only_whatsapp') || 'Só WhatsApp'
+                  : client.contact_method === 'email'
+                    ? t('only_email') || 'Só E-mail'
+                    : t('whatsapp_and_email') || 'WhatsApp e E-mail'}
               </Element>
             )}
           </div>

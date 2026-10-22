@@ -169,7 +169,10 @@ export function ClientCreate({
 
   useEffect(() => {
     if (blankClient && isModalOpen) {
-      setClient({ ...blankClient });
+      setClient({
+        ...blankClient,
+        contact_method: blankClient.contact_method || 'whatsapp_and_email',
+      });
     }
   }, [blankClient, isModalOpen]);
 
@@ -239,6 +242,23 @@ export function ClientCreate({
                 onValueChange={(value) => handleContactsChange(value, 'phone')}
                 errorMessage={errors?.errors['contacts.0.phone']}
               />
+
+              <SelectField
+                label={t('contact_method') || 'Forma de contato'}
+                value={client?.contact_method || 'whatsapp_and_email'}
+                onValueChange={(value) => handleChange('contact_method', value)}
+                errorMessage={errors?.errors.contact_method}
+              >
+                <option value="whatsapp_and_email">
+                  {t('whatsapp_and_email') || 'WhatsApp e E-mail'}
+                </option>
+                <option value="whatsapp">
+                  {t('only_whatsapp') || 'Só WhatsApp'}
+                </option>
+                <option value="email">
+                  {t('only_email') || 'Só E-mail'}
+                </option>
+              </SelectField>
 
               <CurrencySelector
                 label={t('currency')}

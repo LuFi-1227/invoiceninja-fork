@@ -73,6 +73,7 @@ export default function Create() {
     if (blankClient) {
       setClient({
         ...blankClient.data,
+        contact_method: blankClient.data.contact_method || 'whatsapp_and_email',
         group_settings_id: searchParams.get('group') || '',
       });
     }

@@ -154,6 +154,30 @@ export function Details(props: Props) {
         />
       </Element>
 
+      <Element
+        leftSide={t('contact_method') || 'Forma de contato'}
+        leftSideHelp={
+          t('contact_method_help') ||
+          'Canal utilizado como guia na cobrança recorrente'
+        }
+      >
+        <SelectField
+          value={props.client?.contact_method || 'whatsapp_and_email'}
+          onValueChange={(value) => handleChange('contact_method', value)}
+          errorMessage={props.errors?.errors.contact_method}
+        >
+          <option value="whatsapp_and_email">
+            {t('whatsapp_and_email') || 'WhatsApp e E-mail'}
+          </option>
+          <option value="whatsapp">
+            {t('only_whatsapp') || 'Só WhatsApp'}
+          </option>
+          <option value="email">
+            {t('only_email') || 'Só E-mail'}
+          </option>
+        </SelectField>
+      </Element>
+
       <Element leftSide={t('routing_id')}>
         <InputField
           value={props.client?.routing_id || ''}

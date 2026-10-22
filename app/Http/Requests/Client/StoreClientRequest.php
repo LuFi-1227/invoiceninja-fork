@@ -78,6 +78,7 @@ class StoreClientRequest extends Request
         $rules['size_id'] = ['bail', 'nullable', 'sometimes', 'exists:sizes,id'];
         $rules['id_number'] = ['bail', 'nullable', Rule::unique('clients')->where('company_id', $user->company()->id)];
         $rules['classification'] = 'bail|sometimes|nullable|in:individual,business,company,partnership,trust,charity,government,other';
+        $rules['contact_method'] = 'bail|nullable|sometimes|string|in:whatsapp_and_email,whatsapp,email';
         $rules['shipping_country_id'] = 'integer|nullable|exists:countries,id';
         $rules['number'] = ['sometimes', 'nullable', 'bail', Rule::unique('clients')->where('company_id', $user->company()->id)];
         $rules['country_id'] = 'integer|nullable|exists:countries,id';
@@ -221,6 +222,10 @@ class StoreClientRequest extends Request
 
         //If you want to validate, the prop must be set.
         $input['id'] = null;
+
+        if ($this->has('forma_de_contato') && ! $this->has('contact_method')) {
+            $input['contact_method'] = $this->input('forma_de_contato');
+        }
 
         if (array_key_exists('settings', $input)) {
             $input['settings'] = $this->filterSaveableSettings($input['settings']);

@@ -170,7 +170,11 @@ class SendRecurring implements ShouldQueue
             ?: ($invoice->user_id ? \App\Models\User::find($invoice->user_id) : null)
             ?: ($invoice->company ? $invoice->company->owner() : null);
 
-        $contactMethod = $user ? ($user->contact_method ?: 'whatsapp_and_email') : 'whatsapp_and_email';
+        $client = $invoice->client ?: $this->recurring_invoice->client;
+
+        $contactMethod = ($client && $client->hasContactMethod())
+            ? $client->contact_method
+            : ($user ? ($user->contact_method ?: 'whatsapp_and_email') : 'whatsapp_and_email');
         $method = strtolower(trim((string) $contactMethod));
 
         $shouldSendEmail = str_contains($method, 'email') || $method === 'both' || $method === 'all' || empty($method);

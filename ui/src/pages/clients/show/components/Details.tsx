@@ -213,6 +213,28 @@ export function Details(props: Props) {
               </div>
             )}
 
+            {Boolean(client.contact_method) && (
+              <div className="flex flex-col space-y-1">
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: colors.$22 }}
+                >
+                  {t('contact_method') || 'Forma de contato'}
+                </span>
+
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: colors.$3 }}
+                >
+                  {client.contact_method === 'whatsapp'
+                    ? t('only_whatsapp') || 'Só WhatsApp'
+                    : client.contact_method === 'email'
+                      ? t('only_email') || 'Só E-mail'
+                      : t('whatsapp_and_email') || 'WhatsApp e E-mail'}
+                </span>
+              </div>
+            )}
+
             {parseFloat(client.settings.default_task_rate) > 0 && (
               <div className="flex flex-col space-y-1">
                 <span

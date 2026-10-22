@@ -34,6 +34,7 @@ class ClientFactory
         $client->client_hash = Str::random(40);
         $client->settings = ClientSettings::defaults();
         $client->classification = 'business';
+        $client->contact_method = 'whatsapp_and_email';
 
         return $client;
     }
