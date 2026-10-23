@@ -116,4 +116,33 @@ class UserContactMethodRecurringTest extends TestCase
         $transformedDisabled = $transformer->transform($user);
         $this->assertFalse($transformedDisabled['emit_nota_fiscal']);
     }
+
+    public function test_client_contact_method_helpers_and_transformer(): void
+    {
+        $client = new \App\Models\Client();
+
+        $client->contact_method = null;
+        $this->assertFalse($client->hasContactMethod());
+        $this->assertFalse($client->hasWhatsAppContact());
+        $this->assertFalse($client->hasEmailContact());
+
+        $client->contact_method = 'whatsapp_and_email';
+        $this->assertTrue($client->hasContactMethod());
+        $this->assertTrue($client->hasWhatsAppContact());
+        $this->assertTrue($client->hasEmailContact());
+
+        $client->contact_method = 'whatsapp';
+        $this->assertTrue($client->hasContactMethod());
+        $this->assertTrue($client->hasWhatsAppContact());
+        $this->assertFalse($client->hasEmailContact());
+
+        $client->contact_method = 'email';
+        $this->assertTrue($client->hasContactMethod());
+        $this->assertFalse($client->hasWhatsAppContact());
+        $this->assertTrue($client->hasEmailContact());
+
+        $client->forma_de_contato = 'whatsapp';
+        $this->assertEquals('whatsapp', $client->contact_method);
+        $this->assertEquals('whatsapp', $client->forma_de_contato);
+    }
 }

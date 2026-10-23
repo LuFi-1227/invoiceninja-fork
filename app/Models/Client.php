@@ -51,6 +51,8 @@ use Laracasts\Presenter\PresentableTrait;
  * @property string|null $classification
  * @property string|null $logo
  * @property string|null $phone
+ * @property string|null $contact_method
+ * @property bool $emit_nota_fiscal
  * @property string|null $routing_id
  * @property float $balance
  * @property float $paid_to_date
@@ -192,6 +194,8 @@ class Client extends BaseModel implements HasLocalePreference
         'group_settings_id',
         'public_notes',
         'phone',
+        'contact_method',
+        'emit_nota_fiscal',
         'number',
         'routing_id',
         'is_tax_exempt',
@@ -207,6 +211,7 @@ class Client extends BaseModel implements HasLocalePreference
 
     protected $casts = [
         'is_deleted' => 'boolean',
+        'emit_nota_fiscal' => 'boolean',
         'country_id' => 'string',
         'settings' => 'object',
         'updated_at' => 'timestamp',
@@ -248,8 +253,49 @@ class Client extends BaseModel implements HasLocalePreference
         'id_number',
         'public_notes',
         'phone',
+        'contact_method',
+        'emit_nota_fiscal',
         'routing_id',
     ];
+
+    public function shouldEmitNotaFiscal(): bool
+    {
+        return $this->emit_nota_fiscal !== false && $this->emit_nota_fiscal !== 0 && $this->emit_nota_fiscal !== '0';
+    }
+
+    public function hasContactMethod(): bool
+    {
+        $method = strtolower(trim((string) ($this->contact_method ?? '')));
+        return in_array($method, ['whatsapp_and_email', 'whatsapp', 'email', 'both', 'all']);
+    }
+
+    public function hasWhatsAppContact(): bool
+    {
+        if (! $this->hasContactMethod()) {
+            return false;
+        }
+        $method = strtolower(trim((string) $this->contact_method));
+        return str_contains($method, 'whatsapp') || $method === 'both' || $method === 'all';
+    }
+
+    public function hasEmailContact(): bool
+    {
+        if (! $this->hasContactMethod()) {
+            return false;
+        }
+        $method = strtolower(trim((string) $this->contact_method));
+        return str_contains($method, 'email') || $method === 'both' || $method === 'all';
+    }
+
+    public function setFormaDeContatoAttribute($value): void
+    {
+        $this->attributes['contact_method'] = $value;
+    }
+
+    public function getFormaDeContatoAttribute(): ?string
+    {
+        return $this->attributes['contact_method'] ?? null;
+    }
 
     public static array $bulk_update_columns = [
         'public_notes',

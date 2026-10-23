@@ -57,6 +57,10 @@ export interface Client extends Timestamps {
   address1: string;
   address2: string;
   phone: string;
+  contact_method?: string;
+  forma_de_contato?: string;
+  has_contact_method?: boolean;
+  emit_nota_fiscal?: boolean;
   city: string;
   state: string;
   postal_code: string;

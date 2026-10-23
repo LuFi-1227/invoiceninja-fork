@@ -30,6 +30,7 @@ import { CountrySelector } from '$app/components/CountrySelector';
 import { CurrencySelector } from '$app/components/CurrencySelector';
 import { Button, InputField, SelectField } from '$app/components/forms';
 import { NumberInputField } from '$app/components/forms/NumberInputField';
+import Toggle from '$app/components/forms/Toggle';
 import { GroupSettingsSelector } from '$app/components/GroupSettingsSelector';
 import { LanguageSelector } from '$app/components/LanguageSelector';
 import { Modal } from '$app/components/Modal';
@@ -67,7 +68,10 @@ export function ClientCreate({
 
   const { data: paymentTermsResponse } = usePaymentTermsQuery({});
 
-  const handleChange = (property: keyof Client, value: string) => {
+  const handleChange = (
+    property: keyof Client,
+    value: string | number | boolean
+  ) => {
     setErrors(undefined);
 
     setClient((client) => client && set({ ...client }, property, value));
@@ -169,7 +173,11 @@ export function ClientCreate({
 
   useEffect(() => {
     if (blankClient && isModalOpen) {
-      setClient({ ...blankClient });
+      setClient({
+        ...blankClient,
+        contact_method: blankClient.contact_method || 'whatsapp_and_email',
+        emit_nota_fiscal: blankClient.emit_nota_fiscal ?? true,
+      });
     }
   }, [blankClient, isModalOpen]);
 
@@ -238,6 +246,31 @@ export function ClientCreate({
                 value={contacts[0].phone}
                 onValueChange={(value) => handleContactsChange(value, 'phone')}
                 errorMessage={errors?.errors['contacts.0.phone']}
+              />
+
+              <SelectField
+                label={t('contact_method') || 'Forma de contato'}
+                value={client?.contact_method || 'whatsapp_and_email'}
+                onValueChange={(value) => handleChange('contact_method', value)}
+                errorMessage={errors?.errors.contact_method}
+              >
+                <option value="whatsapp_and_email">
+                  {t('whatsapp_and_email') || 'WhatsApp e E-mail'}
+                </option>
+                <option value="whatsapp">
+                  {t('only_whatsapp') || 'Só WhatsApp'}
+                </option>
+                <option value="email">
+                  {t('only_email') || 'Só E-mail'}
+                </option>
+              </SelectField>
+
+              <Toggle
+                label={t('emit_nota_fiscal') || 'Emitir Nota Fiscal'}
+                checked={client?.emit_nota_fiscal ?? true}
+                onValueChange={(value) =>
+                  handleChange('emit_nota_fiscal', value)
+                }
               />
 
               <CurrencySelector

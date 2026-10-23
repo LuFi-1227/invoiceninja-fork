@@ -73,6 +73,8 @@ export default function Create() {
     if (blankClient) {
       setClient({
         ...blankClient.data,
+        contact_method: blankClient.data.contact_method || 'whatsapp_and_email',
+        emit_nota_fiscal: blankClient.data.emit_nota_fiscal ?? true,
         group_settings_id: searchParams.get('group') || '',
       });
     }

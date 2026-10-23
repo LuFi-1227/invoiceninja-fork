@@ -38,16 +38,63 @@ export function userRequiresEmail(user?: User | null): boolean {
   return method.includes('email') || method === 'both' || method === 'all';
 }
 
+export function isClientContactMethodDefined(client?: Client | null): boolean {
+  if (!client) {
+    return false;
+  }
+
+  if (typeof client.has_contact_method === 'boolean') {
+    return client.has_contact_method;
+  }
+
+  const method = (client.contact_method || client.forma_de_contato || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  return VALID_CONTACT_METHODS.includes(method);
+}
+
+export function clientRequiresWhatsApp(client?: Client | null): boolean {
+  if (!client || !isClientContactMethodDefined(client)) return false;
+  const method = (
+    client.contact_method ||
+    client.forma_de_contato ||
+    ''
+  ).toLowerCase();
+  return method.includes('whatsapp') || method === 'both' || method === 'all';
+}
+
+export function clientRequiresEmail(client?: Client | null): boolean {
+  if (!client || !isClientContactMethodDefined(client)) return false;
+  const method = (
+    client.contact_method ||
+    client.forma_de_contato ||
+    ''
+  ).toLowerCase();
+  return method.includes('email') || method === 'both' || method === 'all';
+}
+
 export function doesClientSatisfyContactMethod(
   user?: User | null,
   client?: Client | null
 ): { valid: boolean; missing: 'phone' | 'email' | null } {
-  if (!user || !client) {
+  if (!user && !client) {
     return { valid: true, missing: null };
   }
 
-  const requiresPhone = userRequiresWhatsApp(user);
-  const requiresEmail = userRequiresEmail(user);
+  if (!client) {
+    return { valid: true, missing: null };
+  }
+
+  const useClientMethod = isClientContactMethodDefined(client);
+
+  const requiresPhone = useClientMethod
+    ? clientRequiresWhatsApp(client)
+    : userRequiresWhatsApp(user);
+  const requiresEmail = useClientMethod
+    ? clientRequiresEmail(client)
+    : userRequiresEmail(user);
 
   const hasPhone = Boolean(
     client.phone || client.contacts?.some((c) => Boolean(c.phone))
