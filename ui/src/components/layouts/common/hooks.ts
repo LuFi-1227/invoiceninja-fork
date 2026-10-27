@@ -165,6 +165,12 @@ export function useSettingsRoutes() {
       enabled: isAdmin || isOwner || false,
     },
     {
+      name: 'Asaas',
+      href: '/settings/asaas',
+      current: location.pathname.startsWith('/settings/asaas'),
+      enabled: isAdmin || isOwner || false,
+    },
+    {
       name: t('templates_and_reminders'),
       href: '/settings/templates_and_reminders',
       current: location.pathname.startsWith(

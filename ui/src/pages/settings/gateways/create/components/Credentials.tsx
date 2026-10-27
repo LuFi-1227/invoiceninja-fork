@@ -27,6 +27,7 @@ import { useHandleGoCardless } from '$app/pages/settings/gateways/create/hooks/u
 import { useResolveConfigValue } from '$app/pages/settings/gateways/create/hooks/useResolveConfigValue';
 import { formatLabel } from '../helpers/format-label';
 import { useResolveInputField } from '../hooks/useResolveInputField';
+import { Asaas } from './gateways/Asaas';
 import { GoCardlessOAuth2 } from './gateways/GoCardlessOAuth2';
 import { PayPalPPCP } from './gateways/PayPalPPCP';
 import { Payware } from './gateways/Payware';
@@ -65,8 +66,9 @@ export function Credentials(props: Props) {
   const GOCARDLESS = 'b9886f9257f0c6ee7c302f1c74475f6c';
   const SQUARE = '65faab2ab6e3223dbe848b1686490baz';
   const PAYWARE = 'b0a6294fca4488c2bab58f3e11e3c623';
+  const ASAAS = '07e4d88e0bbf4ad1b7dfeb21434c76b7';
 
-  const hostedGateways = [STRIPE_CONNECT, WEPAY, PAYPAL_PPCP, PAYWARE];
+  const hostedGateways = [STRIPE_CONNECT, WEPAY, PAYPAL_PPCP, PAYWARE, ASAAS];
 
   if (
     isHosted() &&
@@ -147,6 +149,16 @@ export function Credentials(props: Props) {
 
       {props.gateway && props.gateway.key === SQUARE && isHosted() && (
         <SquareOAuth companyGateway={props.companyGateway} />
+      )}
+
+      {props.gateway && props.gateway.key === ASAAS && (
+        <Asaas
+          gateway={props.gateway}
+          companyGateway={props.companyGateway}
+          setCompanyGateway={props.setCompanyGateway}
+          errors={props.errors}
+          isGatewaySaved={props.isGatewaySaved}
+        />
       )}
 
       {props.gateway &&

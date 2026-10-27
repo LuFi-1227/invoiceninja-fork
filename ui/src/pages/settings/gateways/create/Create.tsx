@@ -79,6 +79,7 @@ export const gatewaysDetails = [
   { name: 'btcpay', key: 'vpyfbmdrkqcicpkjqdusgjfluebftuva' },
   { name: 'blockonomics', key: 'wbhf02us6owgo7p4nfjd0ymssdshks4d' },
   { name: 'payware', key: 'b0a6294fca4488c2bab58f3e11e3c623' },
+  { name: 'asaas', key: '07e4d88e0bbf4ad1b7dfeb21434c76b7' },
 ];
 
 const hostedGatewayFilter = [

@@ -19,6 +19,7 @@ interface Props extends CommonProps {
   placeholder?: string;
   rows?: number | undefined;
   border?: boolean;
+  width?: string | number;
 }
 
 export function Textarea(props: Props) {

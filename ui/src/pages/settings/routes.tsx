@@ -60,6 +60,7 @@ export const settingsRoutes = (
       <Route path="tax_settings" element={<Settings.TaxSettings />} />
       <Route path="product_settings" element={<Settings.ProductSettings />} />
       <Route path="whatsapp" element={<Settings.WhatsApp />} />
+      <Route path="asaas" element={<Settings.AsaasSettings />} />
       <Route path="task_settings" element={<Settings.TaskSettings />} />
       <Route path="tags">
         <Route path="" element={<Settings.Tags />} />

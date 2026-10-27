@@ -22,6 +22,7 @@ import { Gateway } from '$app/common/interfaces/statics';
 import { ValidationBag } from '$app/common/interfaces/validation-bag';
 import { useCompanyGatewayQuery } from '$app/common/queries/company-gateways';
 import { Card, Element } from '$app/components/cards';
+import { Button } from '$app/components/forms';
 import { $help, HelpWidget } from '$app/components/HelpWidget';
 import { CircleQuestion } from '$app/components/icons/CircleQuestion';
 import { Settings } from '$app/components/layouts/Settings';
@@ -116,6 +117,15 @@ export function Edit() {
   }, [gateway]);
 
   useEffect(() => {
+    if (
+      companyGateway?.gateway_key === '07e4d88e0bbf4ad1b7dfeb21434c76b7' &&
+      searchParams.get('tab') === null
+    ) {
+      setTabIndex(1);
+    }
+  }, [companyGateway, searchParams]);
+
+  useEffect(() => {
     if (searchParams.get('show_onboarding') === 'true' && companyGateway) {
       setShowOnboardingModal(true);
 
@@ -206,6 +216,19 @@ export function Edit() {
                 <Element leftSide={t('payment_provider')}>
                   {companyGateway.label}
                 </Element>
+
+                {companyGateway.gateway_key ===
+                  '07e4d88e0bbf4ad1b7dfeb21434c76b7' && (
+                  <Element leftSide="Assistente Asaas">
+                    <Button
+                      behavior="button"
+                      type="primary"
+                      onClick={() => setTabIndex(1)}
+                    >
+                      Configurar Chaves & Webhook Dinâmico (Passo a Passo)
+                    </Button>
+                  </Element>
+                )}
 
                 {gateway?.key === 'd14dd26a37cecc30fdd65700bfb55b23' ? (
                   <ImportCustomers />

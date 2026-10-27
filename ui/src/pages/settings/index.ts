@@ -43,4 +43,5 @@ export * from './templates-and-reminders/TemplatesAndReminders';
 export * from './user';
 export * from './users';
 export * from './whatsapp/WhatsApp';
+export * from './asaas/AsaasSettings';
 export * from './workflow-settings/WorkflowSettings';

@@ -1,0 +1,1 @@
+import{$r as e,Bt as t,ei as n}from"./forms-DyDs0V84.js";var r=n(!1);function i(){let n=e(r);return e=>{e?t.error(`password_error_incorrect`):t.dismiss(),n(!0)}}export{r as n,i as t};

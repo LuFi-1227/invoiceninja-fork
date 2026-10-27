@@ -1,0 +1,1 @@
+import{Ar as e}from"./forms-DyDs0V84.js";function t(){let t=e(),n=12,r=`hh:mm:ss A`;return t&&t.settings.military_time&&(n=24,r=`HH:mm:ss`),{timeFormatId:n,timeFormat:r}}export{t};

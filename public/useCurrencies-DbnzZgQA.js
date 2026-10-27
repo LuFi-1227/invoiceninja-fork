@@ -1,0 +1,1 @@
+import{a as e}from"./rolldown-runtime-CNC7AqOf.js";import{St as t}from"./forms-DyDs0V84.js";import{t as n}from"./react-Augu_vA3.js";var r=e(n(),1);function i(){let{data:e}=t(),[n,i]=(0,r.useState)([]);return(0,r.useEffect)(()=>{e?.currencies&&i(e.currencies)},[e]),n}export{i as t};

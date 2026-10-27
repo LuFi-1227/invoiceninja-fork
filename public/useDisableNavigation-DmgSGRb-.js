@@ -1,0 +1,1 @@
+import{n as e}from"./useHasPermission-4_U55VZ_.js";import{t}from"./useEntityAssigned-CiY8ucSj.js";function n(){let n=e(),r=t();return(e,t)=>!n(`view_${e}`)&&!n(`edit_${e}`)&&!r(t)}export{n as t};

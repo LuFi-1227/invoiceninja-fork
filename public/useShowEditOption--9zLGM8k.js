@@ -1,0 +1,1 @@
+import{Ar as e}from"./forms-DyDs0V84.js";function t(){let t=e();return e=>!e.invoice_id||!t?.invoice_task_lock}export{t};
