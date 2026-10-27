@@ -207,6 +207,10 @@ class PdfService
             return $html;
         }
 
+        if (in_array($this->document_type, [self::DELIVERY_NOTE, self::STATEMENT, self::PURCHASE_ORDER], true)) {
+            return $html;
+        }
+
         $entity = null;
 
         try {
@@ -220,9 +224,20 @@ class PdfService
         }
 
         try {
+            if (stripos($html, 'asaas-payment-block') !== false) {
+                return $html;
+            }
+
             $block = \App\Services\Asaas\AsaasPaymentBlock::forInvoice($entity);
 
-            if ($block) {
+            if (! $block) {
+                return $html;
+            }
+
+            if (preg_match('/<table[^>]*id=["\']spacer-table["\'][^>]*>/i', $html) && preg_match('/<\/tbody>\s*<tfoot/i', $html)) {
+                $row = '<tr><td style="padding: 0 1rem;">' . $block . '</td></tr>' . PHP_EOL;
+                $html = preg_replace('/(<\/tbody>\s*<tfoot)/i', $row . '$1', $html, 1);
+            } else {
                 $html = str_ireplace('</body>', $block . PHP_EOL . '</body>', $html);
             }
         } catch (\Throwable $e) {

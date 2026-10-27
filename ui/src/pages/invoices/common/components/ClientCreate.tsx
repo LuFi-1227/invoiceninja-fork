@@ -173,10 +173,11 @@ export function ClientCreate({
 
   useEffect(() => {
     if (blankClient && isModalOpen) {
+      const bc: any = blankClient;
       setClient({
-        ...blankClient,
-        contact_method: blankClient.contact_method || 'whatsapp_and_email',
-        emit_nota_fiscal: blankClient.emit_nota_fiscal ?? true,
+        ...(bc.data || bc),
+        contact_method: (bc.data?.contact_method || bc.contact_method) || 'whatsapp_and_email',
+        emit_nota_fiscal: (bc.data?.emit_nota_fiscal ?? bc.emit_nota_fiscal) ?? true,
       });
     }
   }, [blankClient, isModalOpen]);

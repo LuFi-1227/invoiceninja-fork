@@ -64,8 +64,34 @@ class AsaasBoletoService
         return $this->invoice->company
             ->company_gateways()
             ->where('is_deleted', 0)
+            ->whereNull('deleted_at')
             ->where('gateway_key', self::GATEWAY_KEY)
+            ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * Effective amount due for payment resolution.
+     */
+    public function payableAmount(): float
+    {
+        if (in_array((int) $this->invoice->status_id, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED], true)) {
+            return 0.0;
+        }
+
+        $balance = (float) $this->invoice->balance;
+        if ($balance > 0) {
+            return round($balance, $this->precision());
+        }
+
+        if ((int) $this->invoice->status_id === Invoice::STATUS_DRAFT) {
+            $unpaid = (float) $this->invoice->amount - (float) $this->invoice->paid_to_date;
+            if ($unpaid > 0) {
+                return round($unpaid, $this->precision());
+            }
+        }
+
+        return 0.0;
     }
 
     /**
@@ -77,7 +103,8 @@ class AsaasBoletoService
 
         return $gateway !== null
             && ! empty($gateway->getConfigField('apiKey'))
-            && (float) $this->invoice->balance > 0;
+            && ! empty($this->invoice->id)
+            && $this->payableAmount() > 0;
     }
 
     /**
@@ -100,7 +127,7 @@ class AsaasBoletoService
                 $payment = $this->safePayment($api, (string) $paymentId);
                 $status = $payment['status'] ?? null;
 
-                if (! $payment || in_array($status, self::CLOSED_STATUSES, true)) {
+                if (! $payment || ! empty($payment['deleted']) || in_array($status, self::CLOSED_STATUSES, true)) {
                     $hash = null;
                     $payment = null;
                     $paymentId = null;
@@ -117,18 +144,28 @@ class AsaasBoletoService
                 return null;
             }
 
-            $identification = $this->safeIdentification($api, $paymentId);
             $stored = (array) $hash->data;
+
+            $linha = $stored['asaas_linha_digitavel'] ?? '';
+            $barcode = $stored['asaas_barcode'] ?? '';
+
+            if ($linha === '' || $barcode === '') {
+                $identification = $this->safeIdentification($api, $paymentId);
+                $stored['asaas_linha_digitavel'] = $identification['identificationField'] ?? $linha;
+                $stored['asaas_barcode'] = $identification['barCode'] ?? $barcode;
+                $hash->data = $stored;
+                $hash->save();
+            }
 
             return [
                 'success' => true,
                 'payment_id' => $paymentId,
                 'hash' => $hash?->hash,
                 'url' => $payment['bankSlipUrl'] ?? ($stored['asaas_bank_slip_url'] ?? ''),
-                'linha_digitavel' => $identification['identificationField'] ?? ($stored['asaas_linha_digitavel'] ?? ''),
-                'barcode' => $identification['barCode'] ?? ($stored['asaas_barcode'] ?? ''),
+                'linha_digitavel' => $stored['asaas_linha_digitavel'] ?? '',
+                'barcode' => $stored['asaas_barcode'] ?? '',
                 'due_date' => $payment['dueDate'] ?? ($stored['asaas_due_date'] ?? null),
-                'value' => $stored['amount_with_fee'] ?? round((float) $this->invoice->balance, $this->precision()),
+                'value' => $stored['amount_with_fee'] ?? $this->payableAmount(),
                 'status' => $payment['status'] ?? ($stored['asaas_status'] ?? 'PENDING'),
             ];
         } catch (\Throwable $e) {
@@ -140,6 +177,10 @@ class AsaasBoletoService
 
     /**
      * Resolve the Pix charge (QR base64 image + copy-paste string).
+     *
+     * In Asaas, every Boleto charge is hybrid (Boleto + Pix). We retrieve
+     * the Pix QR Code directly from the single Boleto charge so no duplicate
+     * or standalone Pix charge is ever created.
      */
     public function resolvePix(bool $forceNew = false): ?array
     {
@@ -150,44 +191,65 @@ class AsaasBoletoService
         try {
             $api = $this->api($this->gateway());
 
-            $hash = $forceNew ? null : $this->reusableHash(self::KIND_PIX);
-            $payment = null;
-            $paymentId = $hash?->data->asaas_pix_payment_id ?? null;
-
-            if ($paymentId) {
-                $payment = $this->safePayment($api, (string) $paymentId);
-                $status = $payment['status'] ?? null;
-
-                if (! $payment || in_array($status, self::CLOSED_STATUSES, true)) {
-                    $hash = null;
-                    $payment = null;
-                    $paymentId = null;
-                }
+            // Always link Pix to the single Boleto charge of this invoice
+            $boleto = $this->resolve($forceNew);
+            if (! $boleto || empty($boleto['payment_id'])) {
+                return null;
             }
 
-            if (! $paymentId) {
-                $hash = $this->createHash(self::KIND_PIX);
-                $payment = $this->createPixCharge($api, $hash);
-                $paymentId = (string) ($payment['id'] ?? '');
-            }
+            $paymentId = (string) $boleto['payment_id'];
+            $hash = $this->reusableHash(self::KIND_BOLETO);
 
-            if (empty($paymentId)) {
+            if (! $hash) {
                 return null;
             }
 
             $stored = (array) $hash->data;
 
-            return [
-                'success' => true,
-                'payment_id' => $paymentId,
-                'hash' => $hash?->hash,
-                'encoded_image' => $stored['asaas_pix_encoded_image'] ?? '',
-                'payload' => $stored['asaas_pix_payload'] ?? '',
-                'expiration_date' => $stored['asaas_pix_expiration_date'] ?? null,
-                'due_date' => $payment['dueDate'] ?? ($stored['asaas_pix_due_date'] ?? null),
-                'value' => $stored['amount_with_fee'] ?? round((float) $this->invoice->balance, $this->precision()),
-                'status' => $payment['status'] ?? ($stored['asaas_pix_status'] ?? 'PENDING'),
-            ];
+            // Reuse cached Pix data if already present for this exact payment ID
+            if (! $forceNew
+                && ! empty($stored['asaas_pix_payload'])
+                && ! empty($stored['asaas_pix_encoded_image'])
+                && ($stored['asaas_pix_payment_id'] ?? null) === $paymentId
+            ) {
+                return [
+                    'success' => true,
+                    'payment_id' => $paymentId,
+                    'hash' => $hash->hash,
+                    'encoded_image' => $stored['asaas_pix_encoded_image'] ?? '',
+                    'payload' => $stored['asaas_pix_payload'] ?? '',
+                    'expiration_date' => $stored['asaas_pix_expiration_date'] ?? null,
+                    'due_date' => $stored['asaas_pix_due_date'] ?? ($stored['asaas_due_date'] ?? ($boleto['due_date'] ?? null)),
+                    'value' => $stored['amount_with_fee'] ?? ($boleto['value'] ?? $this->payableAmount()),
+                    'status' => $stored['asaas_pix_status'] ?? ($stored['asaas_status'] ?? 'PENDING'),
+                ];
+            }
+
+            $pix = $this->safePix($api, $paymentId);
+            if (! empty($pix['payload']) || ! empty($pix['encodedImage'])) {
+                $stored['asaas_pix_payment_id'] = $paymentId;
+                $stored['asaas_pix_status'] = $stored['asaas_status'] ?? 'PENDING';
+                $stored['asaas_pix_due_date'] = $stored['asaas_due_date'] ?? ($boleto['due_date'] ?? null);
+                $stored['asaas_pix_encoded_image'] = $pix['encodedImage'] ?? '';
+                $stored['asaas_pix_payload'] = $pix['payload'] ?? '';
+                $stored['asaas_pix_expiration_date'] = $pix['expirationDate'] ?? null;
+                $hash->data = $stored;
+                $hash->save();
+
+                return [
+                    'success' => true,
+                    'payment_id' => $paymentId,
+                    'hash' => $hash->hash,
+                    'encoded_image' => $stored['asaas_pix_encoded_image'],
+                    'payload' => $stored['asaas_pix_payload'],
+                    'expiration_date' => $stored['asaas_pix_expiration_date'],
+                    'due_date' => $stored['asaas_pix_due_date'],
+                    'value' => $stored['amount_with_fee'] ?? ($boleto['value'] ?? $this->payableAmount()),
+                    'status' => $stored['asaas_pix_status'],
+                ];
+            }
+
+            return null;
         } catch (\Throwable $e) {
             Log::warning('AsaasBoletoService resolvePix failed: ' . $e->getMessage());
 
@@ -200,10 +262,21 @@ class AsaasBoletoService
      */
     public function all(bool $forceNew = false): array
     {
+        if (! $this->isAvailable()) {
+            return [
+                'available' => false,
+                'boleto' => null,
+                'pix' => null,
+            ];
+        }
+
+        $boleto = $this->resolve($forceNew);
+        $pix = $this->resolvePix($forceNew);
+
         return [
-            'available' => $this->isAvailable(),
-            'boleto' => $this->resolve($forceNew),
-            'pix' => $this->resolvePix($forceNew),
+            'available' => true,
+            'boleto' => $boleto,
+            'pix' => $pix,
         ];
     }
 
@@ -250,17 +323,19 @@ class AsaasBoletoService
     private function reusableHash(string $kind): ?PaymentHash
     {
         $query = PaymentHash::query()
-            ->where('fee_invoice_id', $this->invoice->id)
+            ->where(function ($q) {
+                $q->where('fee_invoice_id', $this->invoice->id)
+                  ->orWhere('data->invoices', 'like', '%"invoice_id":"' . $this->invoice->hashed_id . '"%');
+            })
             ->whereNull('payment_id');
 
         if ($kind === self::KIND_PIX) {
-            $query->where('data->asaas_payment_kind', self::KIND_PIX)
-                ->whereNotNull('data->asaas_pix_payment_id');
+            $query->where(function ($q) {
+                $q->whereNotNull('data->asaas_pix_payment_id')
+                  ->orWhereNotNull('data->asaas_pix_payload');
+            });
         } else {
-            $query->where(fn ($q) => $q
-                ->where('data->asaas_payment_kind', self::KIND_BOLETO)
-                ->orWhereNull('data->asaas_payment_kind'))
-                ->whereNotNull('data->asaas_payment_id');
+            $query->whereNotNull('data->asaas_payment_id');
         }
 
         return $query->orderByDesc('id')->first();
@@ -268,7 +343,36 @@ class AsaasBoletoService
 
     private function createHash(string $kind): PaymentHash
     {
-        $amount = round((float) $this->invoice->balance, $this->precision());
+        $amount = $this->payableAmount();
+
+        $hash = PaymentHash::query()
+            ->where('fee_invoice_id', $this->invoice->id)
+            ->whereNull('payment_id')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($hash) {
+            $data = (array) $hash->data;
+            $data['amount_with_fee'] = $amount;
+            $data['asaas_source'] = $data['asaas_source'] ?? 'outbound_boleto';
+            if (empty($data['asaas_payment_kind'])) {
+                $data['asaas_payment_kind'] = $kind;
+            }
+            if (empty($data['invoices'])) {
+                $data['invoices'] = [[
+                    'invoice_id' => $this->invoice->hashed_id,
+                    'amount' => $amount,
+                    'invoice_number' => $this->invoice->number,
+                    'pre_payment' => (bool) $this->invoice->is_proforma,
+                ]];
+            }
+            $hash->data = $data;
+            $hash->fee_total = 0;
+            $hash->fee_invoice_id = $this->invoice->id;
+            $hash->save();
+
+            return $hash;
+        }
 
         return PaymentHash::create([
             'hash' => Str::random(32),
@@ -306,38 +410,22 @@ class AsaasBoletoService
 
         $paymentId = (string) ($payment['id'] ?? '');
         $identification = $paymentId ? $this->safeIdentification($api, $paymentId) : [];
+        $pix = $paymentId ? $this->safePix($api, $paymentId) : [];
 
         $data = (array) $hash->data;
         $data['asaas_linha_digitavel'] = $identification['identificationField'] ?? '';
         $data['asaas_barcode'] = $identification['barCode'] ?? '';
         $data['asaas_bank_slip_url'] = $payment['bankSlipUrl'] ?? '';
+        $data['asaas_invoice_url'] = $payment['invoiceUrl'] ?? '';
 
-        $hash->data = $data;
-        $hash->save();
-
-        return $payment;
-    }
-
-    /**
-     * Create (and store) the PIX charge for the invoice.
-     */
-    private function createPixCharge(AsaasApi $api, PaymentHash $hash): array
-    {
-        $payment = $this->storePayment(
-            $api,
-            $hash,
-            'PIX',
-            'asaas_pix_payment_id',
-            'asaas_pix_status',
-        );
-
-        $paymentId = (string) ($payment['id'] ?? '');
-        $pix = $paymentId ? $this->safePix($api, $paymentId) : [];
-
-        $data = (array) $hash->data;
-        $data['asaas_pix_encoded_image'] = $pix['encodedImage'] ?? '';
-        $data['asaas_pix_payload'] = $pix['payload'] ?? '';
-        $data['asaas_pix_expiration_date'] = $pix['expirationDate'] ?? null;
+        if (! empty($pix['payload']) || ! empty($pix['encodedImage'])) {
+            $data['asaas_pix_payment_id'] = $paymentId;
+            $data['asaas_pix_status'] = $payment['status'] ?? 'PENDING';
+            $data['asaas_pix_due_date'] = $payment['dueDate'] ?? ($data['asaas_due_date'] ?? null);
+            $data['asaas_pix_encoded_image'] = $pix['encodedImage'] ?? '';
+            $data['asaas_pix_payload'] = $pix['payload'] ?? '';
+            $data['asaas_pix_expiration_date'] = $pix['expirationDate'] ?? null;
+        }
 
         $hash->data = $data;
         $hash->save();
@@ -353,16 +441,37 @@ class AsaasBoletoService
         try {
             $customerId = $api->createOrUpdateCustomer($this->invoice->client);
             $dueDate = $this->resolveDueDate();
+            $description = 'Fatura ' . ($this->invoice->number ?: '#' . $this->invoice->id);
 
-            $payment = $api->createPayment([
-                'customer' => $customerId,
-                'billingType' => $billingType,
-                'value' => (float) $hash->data->amount_with_fee,
-                'dueDate' => $dueDate,
-                'description' => 'Fatura ' . ($this->invoice->number ?: '#' . $this->invoice->id),
-                'externalReference' => $hash->hash,
-                'postalService' => false,
-            ]);
+            // Re-use active pending payment from Asaas if one already exists for this customer & invoice
+            $payment = $api->findPendingPayment($customerId, $description, $hash->hash);
+
+            if (! $payment || empty($payment['id'])) {
+                $payload = [
+                    'customer' => $customerId,
+                    'billingType' => $billingType,
+                    'value' => (float) $hash->data->amount_with_fee,
+                    'dueDate' => $dueDate,
+                    'description' => $description,
+                    'externalReference' => $hash->hash,
+                    'postalService' => false,
+                ];
+
+                try {
+                    $payment = $api->createPayment($payload);
+                } catch (\Throwable $e) {
+                    // If failed due to invalid customer reference, clear cached customer id and retry once
+                    if (stripos($e->getMessage(), 'customer') !== false || stripos($e->getMessage(), 'cliente') !== false) {
+                        $this->invoice->client->asaas_id = null;
+                        $this->invoice->client->saveQuietly();
+                        $customerId = $api->createOrUpdateCustomer($this->invoice->client);
+                        $payload['customer'] = $customerId;
+                        $payment = $api->createPayment($payload);
+                    } else {
+                        throw $e;
+                    }
+                }
+            }
         } catch (\Throwable $e) {
             // The hash exists only to hold the charge reference; drop it so a
             // failed attempt never leaves an orphan row behind.

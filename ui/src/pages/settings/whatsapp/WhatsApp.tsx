@@ -507,7 +507,11 @@ export function WhatsApp() {
             <span className="text-sm">Gerando QR Code...</span>
           ) : qrImage ? (
             <>
-              <img src={qrImage} alt="WhatsApp QR Code" className="h-64 w-64" />
+              <img
+                src={qrImage}
+                alt="WhatsApp QR Code"
+                className="h-64 w-64 bg-white p-2 rounded-lg"
+              />
               <span className="text-sm text-center text-gray-500">
                 Abra o WhatsApp, vá em Aparelhos conectados e escaneie o código.
               </span>

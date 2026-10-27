@@ -230,7 +230,7 @@ class SettingsData
 
     public bool $ubl_email_attachment = false; //@implemented
 
-    public string $email_style = 'light'; // plain, light, dark, custom  //@implemented
+    public string $email_style = 'custom'; // plain, light, dark, custom  //@implemented
 
     public string $email_style_custom = '';      // the template itself  //@implemented
 
@@ -298,25 +298,25 @@ class SettingsData
 
     public string $email_template_custom3 = ''; //@TODO
 
-    public bool $enable_reminder1 = false; //@implmemented
+    public bool $enable_reminder1 = true; //@implmemented
 
-    public bool $enable_reminder2 = false; //@implmemented
+    public bool $enable_reminder2 = true; //@implmemented
 
-    public bool $enable_reminder3 = false; //@implmemented
+    public bool $enable_reminder3 = true; //@implmemented
 
-    public bool $enable_reminder_endless = false; //@implmemented
+    public bool $enable_reminder_endless = true; //@implmemented
 
-    public int $num_days_reminder1 = 0; //@implmemented
+    public int $num_days_reminder1 = 7; //@implmemented
 
-    public int $num_days_reminder2 = 0; //@implmemented
+    public int $num_days_reminder2 = 3; //@implmemented
 
     public int $num_days_reminder3 = 0; //@implmemented
 
-    public string $schedule_reminder1 = ''; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
+    public string $schedule_reminder1 = 'before_due_date'; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
 
-    public string $schedule_reminder2 = ''; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
+    public string $schedule_reminder2 = 'before_due_date'; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
 
-    public string $schedule_reminder3 = ''; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
+    public string $schedule_reminder3 = 'after_due_date'; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
 
     public int $reminder_send_time = 0; // number of seconds from UTC +0 to send reminders @TODO
 

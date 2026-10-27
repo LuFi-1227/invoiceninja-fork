@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Log;
 class AsaasApi
 {
     private const PRODUCTION_URL = 'https://api.asaas.com/v3';
-    private const SANDBOX_URL = 'https://sandbox.asaas.com/v3';
+    private const SANDBOX_URL = 'https://sandbox.asaas.com/api/v3';
 
     private string $apiKey;
     private bool $testMode;
@@ -94,30 +94,29 @@ class AsaasApi
         }
 
         // Create new customer
-        $contact = $client->contacts()->first();
-        $postalCode = preg_replace('/\D/', '', $client->postal_code ?: '');
-        $phone = preg_replace('/\D/', '', $client->phone ?: ($contact?->phone ?: ''));
-
-        $payload = [
-            'name' => $client->present()->name() ?: ($contact ? trim($contact->first_name . ' ' . $contact->last_name) : 'Cliente'),
-            'cpfCnpj' => $cpfCnpj,
-            'email' => $contact?->email ?: '',
-            'phone' => $phone,
-            'mobilePhone' => $phone,
-            'postalCode' => $postalCode,
-            'address' => $client->address1 ?: '',
-            'addressNumber' => $client->address2 ?: 'S/N',
-            'province' => $client->city ?: '',
-            'externalReference' => $client->hashed_id,
-            'notificationDisabled' => false,
-        ];
-
-        // Filter empty keys except name and cpfCnpj
-        $payload = array_filter($payload, fn($val) => $val !== '' && $val !== null);
+        $payload = $this->buildCustomerPayload($client, $cpfCnpj);
 
         $response = $this->client()->post($this->baseUrl . '/customers', $payload);
 
-        if (!$response->successful()) {
+        if (!$response->successful() || empty($response->json('id'))) {
+            // Fallback with minimal required fields in case optional address fields were rejected by Asaas
+            $contact = $client->contacts()->first();
+            $minimalPayload = array_filter([
+                'name' => $client->present()->name() ?: ($contact ? trim($contact->first_name . ' ' . $contact->last_name) : 'Cliente'),
+                'cpfCnpj' => $cpfCnpj,
+                'externalReference' => $client->hashed_id ?: null,
+                'notificationDisabled' => true,
+            ], fn($val) => $val !== '' && $val !== null);
+
+            if ($minimalPayload !== $payload) {
+                $retryResponse = $this->client()->post($this->baseUrl . '/customers', $minimalPayload);
+                if ($retryResponse->successful() && !empty($retryResponse->json('id'))) {
+                    $response = $retryResponse;
+                }
+            }
+        }
+
+        if (!$response->successful() || empty($response->json('id'))) {
             $errorMsg = $response->json('errors.0.description') ?? $response->body();
             throw new \Exception('Asaas customer creation failed: ' . $errorMsg);
         }
@@ -126,6 +125,51 @@ class AsaasApi
         $this->persistCustomerId($client, $customerId);
 
         return $customerId;
+    }
+
+    /**
+     * Build sanitized customer payload for Asaas API.
+     * Note: Contact info (email, phone, mobilePhone) is omitted and notificationDisabled is set to true
+     * to prevent Asaas from sending direct notifications/charges to the customer.
+     */
+    private function buildCustomerPayload(Client $client, string $cpfCnpj, bool $includeNotificationFlag = true): array
+    {
+        $contact = $client->contacts()->first();
+        $postalCode = preg_replace('/\D/', '', $client->postal_code ?: '');
+        if (strlen($postalCode) !== 8) {
+            $postalCode = '';
+        }
+
+        $address = trim((string) ($client->address1 ?: ''));
+        $addressNumber = '';
+        $complement = trim((string) ($client->address2 ?: ''));
+
+        if ($address !== '' && preg_match('/^(.+?),\s*(\d+[A-Za-z0-9\-\/]*)$/u', $address, $matches)) {
+            $address = trim($matches[1]);
+            $addressNumber = trim($matches[2]);
+        } elseif ($complement !== '' && preg_match('/^\d+[A-Za-z0-9\-\/]*$/', $complement)) {
+            $addressNumber = $complement;
+            $complement = '';
+        } elseif ($address !== '') {
+            $addressNumber = 'S/N';
+        }
+
+        $payload = [
+            'name' => $client->present()->name() ?: ($contact ? trim($contact->first_name . ' ' . $contact->last_name) : 'Cliente'),
+            'cpfCnpj' => $cpfCnpj,
+            'postalCode' => $postalCode,
+            'address' => $address,
+            'addressNumber' => $addressNumber,
+            'complement' => $complement,
+            'province' => $client->city ?: '',
+            'externalReference' => $client->hashed_id,
+        ];
+
+        if ($includeNotificationFlag) {
+            $payload['notificationDisabled'] = true;
+        }
+
+        return array_filter($payload, fn($val) => $val !== '' && $val !== null);
     }
 
     /**
@@ -147,24 +191,7 @@ class AsaasApi
      */
     public function updateCustomer(string $customerId, Client $client, string $cpfCnpj = ''): void
     {
-        $contact = $client->contacts()->first();
-        $postalCode = preg_replace('/\D/', '', $client->postal_code ?: '');
-        $phone = preg_replace('/\D/', '', $client->phone ?: ($contact?->phone ?: ''));
-
-        $payload = [
-            'name' => $client->present()->name() ?: ($contact ? trim($contact->first_name . ' ' . $contact->last_name) : 'Cliente'),
-            'cpfCnpj' => $cpfCnpj,
-            'email' => $contact?->email ?: '',
-            'phone' => $phone,
-            'mobilePhone' => $phone,
-            'postalCode' => $postalCode,
-            'address' => $client->address1 ?: '',
-            'addressNumber' => $client->address2 ?: 'S/N',
-            'province' => $client->city ?: '',
-            'externalReference' => $client->hashed_id,
-        ];
-
-        $payload = array_filter($payload, fn($val) => $val !== '' && $val !== null);
+        $payload = $this->buildCustomerPayload($client, $cpfCnpj, true);
 
         $this->client()->post($this->baseUrl . '/customers/' . $customerId, $payload);
     }
@@ -226,6 +253,53 @@ class AsaasApi
         }
 
         return (array) $response->json();
+    }
+
+    /**
+     * Find an active pending payment for a customer matching description or external reference.
+     */
+    public function findPendingPayment(string $customerId, ?string $description = null, ?string $externalReference = null): ?array
+    {
+        try {
+            $query = ['customer' => $customerId, 'status' => 'PENDING'];
+            if ($externalReference) {
+                $query['externalReference'] = $externalReference;
+            }
+            $response = $this->client()->get($this->baseUrl . '/payments', $query);
+            if ($response->successful()) {
+                $items = $response->json('data') ?? [];
+                foreach ($items as $item) {
+                    if (empty($item['deleted']) && ($item['status'] ?? '') === 'PENDING') {
+                        if ($description && ($item['description'] ?? '') === $description) {
+                            return (array) $item;
+                        }
+                        if ($externalReference && ($item['externalReference'] ?? '') === $externalReference) {
+                            return (array) $item;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Asaas findPendingPayment failed: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Delete / cancel a pending payment on Asaas.
+     */
+    public function deletePayment(string $paymentId): bool
+    {
+        try {
+            $response = $this->client()->delete($this->baseUrl . '/payments/' . $paymentId);
+
+            return $response->successful() && !empty($response->json('deleted'));
+        } catch (\Throwable $e) {
+            Log::warning('Asaas deletePayment failed: ' . $e->getMessage());
+
+            return false;
+        }
     }
 
     /**

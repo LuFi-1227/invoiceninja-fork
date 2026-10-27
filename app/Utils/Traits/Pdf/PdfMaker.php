@@ -82,8 +82,18 @@ trait PdfMaker
 
         $pdf->addChromiumArguments(implode(' ', $chrome_flags));
 
-        if (config('ninja.snappdf_chromium_path')) {
-            $pdf->setChromiumPath(config('ninja.snappdf_chromium_path'));
+        $chromiumPath = config('ninja.snappdf_chromium_path');
+        if (! $chromiumPath) {
+            foreach (['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'] as $candidate) {
+                if (file_exists($candidate) && is_executable($candidate)) {
+                    $chromiumPath = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if ($chromiumPath) {
+            $pdf->setChromiumPath($chromiumPath);
         }
 
         $generated = $pdf

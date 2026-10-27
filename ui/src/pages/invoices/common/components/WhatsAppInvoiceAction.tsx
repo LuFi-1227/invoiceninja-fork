@@ -160,7 +160,7 @@ export function WhatsAppInvoiceAction(props: Props) {
                 {options?.pdf && (
                   <button
                     type="button"
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                     onClick={() =>
                       window.open(endpoint(options.pdf!.url), '_blank')
                     }
@@ -176,7 +176,7 @@ export function WhatsAppInvoiceAction(props: Props) {
                   <span>Anexar Boleto</span>
                   <button
                     type="button"
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                     onClick={() =>
                       window.open(endpoint(options.boleto!.url), '_blank')
                     }

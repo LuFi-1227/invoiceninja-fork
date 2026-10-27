@@ -72,9 +72,15 @@ export default function Create() {
   useEffect(() => {
     if (blankClient) {
       setClient({
-        ...blankClient.data,
-        contact_method: blankClient.data.contact_method || 'whatsapp_and_email',
-        emit_nota_fiscal: blankClient.data.emit_nota_fiscal ?? true,
+        ...(blankClient as any).data || blankClient,
+        contact_method:
+          ((blankClient as any).data?.contact_method ||
+            (blankClient as any).contact_method) ||
+          'whatsapp_and_email',
+        emit_nota_fiscal:
+          ((blankClient as any).data?.emit_nota_fiscal ??
+            (blankClient as any).emit_nota_fiscal) ??
+          true,
         group_settings_id: searchParams.get('group') || '',
       });
     }

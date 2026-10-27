@@ -88,7 +88,11 @@ class TemplateEmail extends Mailable
         }
 
         if ($this->build_email->getTemplate() == 'custom') {
-            $this->build_email->setBody(str_replace('$body', $this->build_email->getBody() . $this->buildLinksForCustomDesign(), $this->client->getSetting('email_style_custom')));
+            $customDesign = $this->client->getSetting('email_style_custom');
+            if (empty($customDesign) || !str_contains($customDesign, '$body')) {
+                $customDesign = '$body';
+            }
+            $this->build_email->setBody(str_replace('$body', $this->build_email->getBody() . $this->buildLinksForCustomDesign(), $customDesign));
         }
 
         $settings = $this->client->getMergedSettings();

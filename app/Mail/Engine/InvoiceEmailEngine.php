@@ -119,6 +119,73 @@ class InvoiceEmailEngine extends BaseEmailEngine
         $variables = (new HtmlEngine($this->invitation))->makeValues();
         $invitation = $this->invitation->withoutRelations();
 
+        // Enrich variables for branded email templates
+        $company = $this->invoice->company;
+        $settings = $this->client->getMergedSettings();
+
+        $logoUrl = $company->present()->logo($settings) ?: ($settings->company_logo ?? '');
+        $variables['$company_logo'] = $logoUrl ?: '';
+        $variables['$company.logo_url'] = $logoUrl ?: '';
+        $logoHtml = !empty($logoUrl)
+            ? '<img src="' . $logoUrl . '" alt="' . htmlspecialchars($company->present()->name() ?: 'Logo', ENT_QUOTES) . '" width="170" style="display:block; width:170px; max-width:100%; height:auto; border:0;">'
+            : '<div style="font-size:20px; font-weight:bold; color:#ffffff;">' . htmlspecialchars($company->present()->name() ?: 'Vittne', ENT_QUOTES) . '</div>';
+        $variables['$company_logo_tag'] = $logoHtml;
+        $variables['$company_logo_img'] = $logoHtml;
+
+        // Configurable theme colors per company (with fallback to default palette)
+        $primaryColor = !empty($settings->email_header_bg) ? $settings->email_header_bg : (!empty($settings->primary_color) ? $settings->primary_color : '#092e7d');
+        $secondaryColor = !empty($settings->email_button_bg) ? $settings->email_button_bg : (!empty($settings->secondary_color) ? $settings->secondary_color : '#ff3d0b');
+        $bgColor = !empty($settings->email_bg_color) ? $settings->email_bg_color : '#f3f3f3';
+        $cardColor = !empty($settings->email_card_color) ? $settings->email_card_color : '#ffffff';
+        $paymentBgColor = !empty($settings->email_payment_bg_color) ? $settings->email_payment_bg_color : '#e7f8f8';
+        $accentColor = !empty($settings->email_accent_color) ? $settings->email_accent_color : '#005b60';
+        $footerBgColor = !empty($settings->email_footer_bg_color) ? $settings->email_footer_bg_color : '#3d3d3d';
+
+        $variables['$theme_bg_color'] = $bgColor;
+        $variables['$theme_card_color'] = $cardColor;
+        $variables['$theme_header_bg'] = $primaryColor;
+        $variables['$theme_button_bg'] = $secondaryColor;
+        $variables['$theme_payment_bg'] = $paymentBgColor;
+        $variables['$theme_accent_color'] = $accentColor;
+        $variables['$theme_footer_bg'] = $footerBgColor;
+
+        // Fallbacks for direct names
+        $variables['$email_bg_color'] = $bgColor;
+        $variables['$email_card_color'] = $cardColor;
+        $variables['$email_header_bg'] = $primaryColor;
+        $variables['$email_button_bg'] = $secondaryColor;
+        $variables['$email_payment_bg'] = $paymentBgColor;
+        $variables['$email_accent_color'] = $accentColor;
+        $variables['$email_footer_bg'] = $footerBgColor;
+
+        // Company contact details
+        $variables['$company.email'] = $settings->email ?: ($company->email ?: 'contato@vittne.com.br');
+        $variables['$company.phone'] = $settings->phone ?: ($company->phone ?: '(41) 2510-0665');
+        $rawWebsite = $settings->website ?: ($company->website ?: 'vittne.com.br');
+        $variables['$company.website'] = preg_replace('#^https?://#i', '', $rawWebsite);
+        $variables['$company.city'] = $settings->city ?: ($company->city ?: 'Curitiba/PR');
+
+        // Asaas Boleto and Pix details
+        $variables['$asaas_linha_digitavel'] = 'Disponível no link de pagamento';
+        $variables['$asaas_pix_payload'] = 'Disponível no link de pagamento';
+        try {
+            if ($company && (float) $this->invoice->balance > 0) {
+                $service = \App\Services\Asaas\AsaasBoletoService::forInvoice($this->invoice);
+                if ($service->isAvailable()) {
+                    $boletoData = $service->resolve();
+                    $pixData = $service->resolvePix();
+                    if (!empty($boletoData['linha_digitavel'])) {
+                        $variables['$asaas_linha_digitavel'] = $boletoData['linha_digitavel'];
+                    }
+                    if (!empty($pixData['payload'])) {
+                        $variables['$asaas_pix_payload'] = $pixData['payload'];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            nlog('Asaas variables resolution skipped: ' . $e->getMessage());
+        }
+
         $this->setTemplate($this->client->getSetting('email_style'))
             ->setContact($contact)
             ->setVariables($variables)//move make values into the htmlengine

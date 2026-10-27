@@ -48,7 +48,9 @@ class AsaasNotaFiscalService
         $companyGateway = $invoice->company
             ->company_gateways()
             ->where('is_deleted', 0)
+            ->whereNull('deleted_at')
             ->where('gateway_key', AsaasBoletoService::GATEWAY_KEY)
+            ->orderByDesc('id')
             ->first();
 
         if (!$companyGateway || empty($companyGateway->getConfigField('apiKey'))) {

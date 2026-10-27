@@ -245,7 +245,7 @@ class CompanySettings extends BaseSettings
 
     public $ubl_email_attachment = false; //@implemented
 
-    public $email_style = 'light'; //plain, light, dark, custom  //@implemented
+    public $email_style = 'custom'; //plain, light, dark, custom  //@implemented
 
     public $email_style_custom = '';      //the template itself  //@implemented
 
@@ -309,25 +309,25 @@ class CompanySettings extends BaseSettings
 
     public $email_template_custom3 = ''; //@TODO
 
-    public $enable_reminder1 = false; //@implmemented
+    public $enable_reminder1 = true; //@implmemented
 
-    public $enable_reminder2 = false; //@implmemented
+    public $enable_reminder2 = true; //@implmemented
 
-    public $enable_reminder3 = false; //@implmemented
+    public $enable_reminder3 = true; //@implmemented
 
-    public $enable_reminder_endless = false; //@implmemented
+    public $enable_reminder_endless = true; //@implmemented
 
-    public $num_days_reminder1 = 0; //@implmemented
+    public $num_days_reminder1 = 7; //@implmemented
 
-    public $num_days_reminder2 = 0; //@implmemented
+    public $num_days_reminder2 = 3; //@implmemented
 
     public $num_days_reminder3 = 0; //@implmemented
 
-    public $schedule_reminder1 = ''; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
+    public $schedule_reminder1 = 'before_due_date'; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
 
-    public $schedule_reminder2 = ''; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
+    public $schedule_reminder2 = 'before_due_date'; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
 
-    public $schedule_reminder3 = ''; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
+    public $schedule_reminder3 = 'after_due_date'; // (enum: after_invoice_date, before_due_date, after_due_date) implmemented
 
     public $reminder_send_time = 0; //number of seconds from UTC +0 to send reminders @TODO
 
@@ -343,7 +343,7 @@ class CompanySettings extends BaseSettings
 
     public $late_fee_percent3 = 0; //@implemented
 
-    public $endless_reminder_frequency_id = '0'; //@implemented
+    public $endless_reminder_frequency_id = '1'; //@implemented
 
     public $late_fee_endless_amount = 0; //@implemented
 

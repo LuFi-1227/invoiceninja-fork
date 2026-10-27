@@ -18,14 +18,22 @@ npm-debug.log
 yarn-error.log
 local_version.txt
 .env
+.env.*
+.env.bak*
 .phpunit.result.cache
 _ide_helper.php
 
 /resources/assets/bower
 /public/logo
-.env.dusk.local
-.env.cypress
-.env.playwright
+.env
+.env.*
+.env.bak*.dusk.local
+.env
+.env.*
+.env.bak*.cypress
+.env
+.env.*
+.env.bak*.playwright
 /public/vendors/*
 *.log
 
@@ -72,4 +80,6 @@ node_modules/
 
 # UI source local env
 /ui/.env
+.env.*
+.env.bak*
 *.tsbuildinfo

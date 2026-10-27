@@ -66,6 +66,7 @@ class BaseEmailEngine implements EngineInterface
     public function setSubject($subject)
     {
         if (! empty($this->variables)) {
+            uksort($this->variables, fn($a, $b) => strlen($b) <=> strlen($a));
             $subject = str_replace(array_keys($this->variables), array_values($this->variables), $subject);
         }
 
@@ -77,7 +78,7 @@ class BaseEmailEngine implements EngineInterface
     public function setBody($body)
     {
         if (! empty($this->variables)) {
-            $body = str_replace(array_keys($this->variables), array_values($this->variables), $body);
+            uksort($this->variables, fn($a, $b) => strlen($b) <=> strlen($a));
             $body = str_replace(array_keys($this->variables), array_values($this->variables), $body);
         }
 
