@@ -78,7 +78,12 @@ trait PdfMaker
             '--enable-font-antialiasing',
             // important for background-images
             '--virtual-time-budget=10000',
+            '--crash-dumps-dir=/tmp',
         ];
+
+        if (!getenv('HOME') || getenv('HOME') === '/root' || getenv('HOME') === '/var/www') {
+            putenv('HOME=/tmp');
+        }
 
         $pdf->addChromiumArguments(implode(' ', $chrome_flags));
 

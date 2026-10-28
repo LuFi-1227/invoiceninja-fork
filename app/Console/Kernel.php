@@ -141,6 +141,16 @@ class Kernel extends ConsoleKernel
         /* Pulls in bank transactions from third party services */
         $schedule->job(new BankTransactionSync())->twiceDaily(1, 13)->withoutOverlapping()->name('bank-trans-sync-job')->onOneServer();
 
+        /* Pulls in Asaas corporate debit card expenses into GestoreMio expenses */
+        if (config('ninja.asaas.auto_sync_card_expenses', true)) {
+            $days = (int) config('ninja.asaas.card_sync_days', 30);
+            $schedule->command("asaas:sync-card-expenses --days={$days}")
+                ->hourly()
+                ->withoutOverlapping()
+                ->name('asaas-sync-card-expenses-job')
+                ->onOneServer();
+        }
+
         if (Ninja::isSelfHost()) {
             $schedule->call(function () {
                 Account::query()->whereNotNull('id')->update(['is_scheduler_running' => true]);

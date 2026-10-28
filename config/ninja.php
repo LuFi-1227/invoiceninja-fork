@@ -294,4 +294,8 @@ return [
     'run_trial_mysql_integration_tests' => env('RUN_NINJA_TRIAL_MYSQL_TESTS', false),
     'trial_test_account_connection' => env('NINJA_TRIAL_TEST_ACCOUNT_CONNECTION'),
     'pdf_inline_images' => env('PDF_INLINE_IMAGES', false),
+    'asaas' => [
+        'auto_sync_card_expenses' => env('ASAAS_AUTO_SYNC_CARD_EXPENSES', true),
+        'card_sync_days' => env('ASAAS_CARD_SYNC_DAYS', 30),
+    ],
 ];

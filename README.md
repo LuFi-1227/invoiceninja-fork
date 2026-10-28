@@ -161,6 +161,98 @@ If you are considering contributing back to the main repository, please add in a
 
 Also, if you plan any additions for the main repository, you may want to discuss this with us first on Slack where we can assist with any technical information and provide advice.
 
+## Sincronização de Gastos do Cartão de Débito Asaas (GestoreMio)
+
+O GestoreMio sincroniza automaticamente os gastos e compras efetuadas com o cartão de débito corporativo da conta Asaas (`ASAAS_CARD_TRANSACTION`) para o módulo de **Despesas** (*Expenses*), refletindo diretamente nos relatórios financeiros, fluxo de caixa e no *Dashboard*.
+
+### 1. Como Funciona
+* **Idempotente:** Cada transação do Asaas é vinculada pelo ID único (`transaction_reference`). O sistema nunca duplica despesas já importadas.
+* **Auto-Categorização e Fornecedor:** Identifica o nome do estabelecimento comercial a partir da descrição da transação e cria/vincula o Fornecedor (*Vendor*), além de agrupar sob a categoria `Cartão Asaas` com a forma de pagamento `Cartão de Débito`.
+* **Automação no Docker:** O agendador interno do container executa a sincronização automaticamente a cada hora.
+
+---
+
+### 2. Configuração no Docker Compose
+
+A automação já está configurada no `docker-compose.yml` montando os serviços do Supervisor e expondo as variáveis de ambiente necessárias.
+
+No seu arquivo `.env`:
+```env
+# Ativa a sincronização automática no agendador horário (padrão: true)
+ASAAS_AUTO_SYNC_CARD_EXPENSES=true
+
+# Quantidade de dias retroativos a consultar em cada ciclo (padrão: 30)
+ASAAS_CARD_SYNC_DAYS=30
+```
+
+No `docker-compose.yml`, o container `app` mapeia:
+```yaml
+services:
+  app:
+    environment:
+      - ASAAS_AUTO_SYNC_CARD_EXPENSES=${ASAAS_AUTO_SYNC_CARD_EXPENSES:-true}
+      - ASAAS_CARD_SYNC_DAYS=${ASAAS_CARD_SYNC_DAYS:-30}
+    volumes:
+      - ./docker/programs.conf:/etc/supervisor/conf.d/programs.conf:ro
+      - ./docker/supervisord.conf:/etc/supervisor/supervisord.conf:ro
+```
+
+Para aplicar as alterações no container:
+```bash
+docker compose up -d
+```
+
+---
+
+### 3. Execução Manual via Artisan
+
+Você pode disparar a sincronização a qualquer momento via terminal:
+
+```bash
+# Sincroniza os últimos 30 dias de todas as empresas com gateway Asaas
+docker compose exec app php artisan asaas:sync-card-expenses
+
+# Sincroniza um período customizado (ex.: últimos 7 dias)
+docker compose exec app php artisan asaas:sync-card-expenses --days=7
+
+# Sincroniza um intervalo de datas específico
+docker compose exec app php artisan asaas:sync-card-expenses --start-date=2026-10-01 --finish-date=2026-10-28
+
+# Sincroniza todo o histórico disponível
+docker compose exec app php artisan asaas:sync-card-expenses --all-time
+```
+
+---
+
+### 4. Disparo por Webhook / API Externa
+
+A sincronização também pode ser disparada sob demanda por ferramentas externas (como n8n, Make, scripts ou webhooks):
+
+#### A. Endpoint de Webhook (Autenticado via token do Asaas)
+* **URL:** `POST /webhooks/asaas/sync_card_expenses/{company_key}`
+* **Header:** `asaas-access-token: <seu_webhook_token_do_asaas>` (ou via query `?token=...`)
+* **Parâmetros Opcionais (JSON ou Query):** `days`, `start_date`, `finish_date`, `all_time`, `category_name`
+
+Exemplo de chamada com cURL:
+```bash
+curl -X POST "https://gestore.seudominio.com/webhooks/asaas/sync_card_expenses/SEU_COMPANY_KEY?days=15" \
+  -H "asaas-access-token: SEU_WEBHOOK_TOKEN"
+```
+
+#### B. Endpoint da API Interna (Autenticado via Token do GestoreMio)
+* **URL:** `POST /api/v1/asaas/sync_card_expenses`
+* **Header:** `X-Api-Token: <token_de_api_do_gestoremio>`
+
+Exemplo:
+```bash
+curl -X POST "https://gestore.seudominio.com/api/v1/asaas/sync_card_expenses" \
+  -H "X-Api-Token: SEU_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"days": 30}'
+```
+
+---
+
 ## Credits
 * [Hillel Coren](https://hillelcoren.com/)
 * [David Bomba](https://github.com/turbo124)

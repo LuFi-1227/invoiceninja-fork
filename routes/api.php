@@ -337,6 +337,7 @@ Route::group(['middleware' => ['throttle:api', 'token_auth', 'valid_json','local
     Route::get('invoices/{invoice}/whatsapp/pdf', [WhatsAppController::class, 'showInvoicePdf'])->name('invoices.whatsapp.pdf');
     Route::get('invoices/{invoice}/whatsapp/boleto', [WhatsAppController::class, 'showBoletoPdf'])->name('invoices.whatsapp.boleto');
     Route::post('invoices/{invoice}/emit_asaas_nfe', [InvoiceController::class, 'emitAsaasNotaFiscal'])->name('invoices.emit_asaas_nfe');
+    Route::post('asaas/sync_card_expenses', [\App\Http\Controllers\AsaasCardExpenseController::class, 'sync'])->name('asaas.sync_card_expenses');
 
     Route::resource('locations', LocationController::class); // name = (locations. index / create / show / update / destroy / edit
     Route::post('locations/bulk', [LocationController::class, 'bulk'])->name('locations.bulk');
@@ -542,6 +543,10 @@ Route::match(['get', 'post'], 'payment_webhook/{company_key}/{company_gateway_id
 Route::match(['get', 'post'], 'payment_notification_webhook/{company_key}/{company_gateway_id}/{client}', PaymentNotificationWebhookController::class)
     ->middleware('throttle:1000,1')
     ->name('payment_notification_webhook');
+
+Route::match(['get', 'post'], 'webhooks/asaas/sync_card_expenses/{company_key}', [\App\Http\Controllers\AsaasCardExpenseController::class, 'webhookSync'])
+    ->middleware('throttle:1000,1')
+    ->name('webhooks.asaas.sync_card_expenses');
 
 Route::post('api/v1/postmark_webhook', [PostMarkController::class, 'webhook'])->middleware('throttle:5000,1');
 Route::post('api/v1/sns_webhook', [SNSController::class, 'webhook'])->middleware('throttle:5000,1');

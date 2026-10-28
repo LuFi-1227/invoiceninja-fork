@@ -250,6 +250,9 @@ class TemplateEngine
 
         if ($email_style == 'custom') {
             $wrapper = $this->settings_entity->getSetting('email_style_custom') ?? '';
+            if (empty($wrapper) || !str_contains($wrapper, '$body')) {
+                $wrapper = '$body';
+            }
 
             // In order to parse variables such as $signature in the body,
             // we need to replace strings with the values from HTMLEngine.

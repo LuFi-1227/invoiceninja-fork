@@ -352,6 +352,21 @@ class AsaasApi
     }
 
     /**
+     * Retrieve financial transactions / statement from Asaas.
+     */
+    public function getFinancialTransactions(array $query = []): array
+    {
+        $response = $this->client()->get($this->baseUrl . '/financialTransactions', $query);
+
+        if (!$response->successful()) {
+            $errorMsg = $response->json('errors.0.description') ?? $response->body();
+            throw new \Exception('Asaas getFinancialTransactions failed: ' . $errorMsg);
+        }
+
+        return (array) $response->json();
+    }
+
+    /**
      * Validate incoming webhook token header.
      */
     public function validateWebhookToken(?string $receivedToken): bool

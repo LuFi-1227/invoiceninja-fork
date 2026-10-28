@@ -691,6 +691,57 @@ class HtmlEngine
 
         $data['$company.logo_url'] = ['value' => $logo_url ?: ' ', 'label' => ctrans('texts.logo')];
 
+        $brandedLogoUrl = $this->company->present()->logo($this->settings) ?: ($this->settings->company_logo ?? '');
+        $brandedLogoHtml = !empty($brandedLogoUrl)
+            ? '<img src="' . $brandedLogoUrl . '" alt="' . htmlspecialchars($this->company->present()->name() ?: 'Logo', ENT_QUOTES) . '" width="170" style="display:block; width:170px; max-width:100%; height:auto; border:0;">'
+            : '<div style="font-size:20px; font-weight:bold; color:#ffffff;">' . htmlspecialchars($this->company->present()->name() ?: 'Vittne', ENT_QUOTES) . '</div>';
+        $data['$company_logo_tag'] = ['value' => $brandedLogoHtml, 'label' => ''];
+        $data['$company_logo_img'] = ['value' => $brandedLogoHtml, 'label' => ''];
+
+        $primaryColor = !empty($this->settings->email_header_bg) ? $this->settings->email_header_bg : (!empty($this->settings->primary_color) ? $this->settings->primary_color : '#092e7d');
+        $secondaryColor = !empty($this->settings->email_button_bg) ? $this->settings->email_button_bg : (!empty($this->settings->secondary_color) ? $this->settings->secondary_color : '#ff3d0b');
+        $bgColor = !empty($this->settings->email_bg_color) ? $this->settings->email_bg_color : '#f3f3f3';
+        $cardColor = !empty($this->settings->email_card_color) ? $this->settings->email_card_color : '#ffffff';
+        $paymentBgColor = !empty($this->settings->email_payment_bg_color) ? $this->settings->email_payment_bg_color : '#e7f8f8';
+        $accentColor = !empty($this->settings->email_accent_color) ? $this->settings->email_accent_color : '#005b60';
+        $footerBgColor = !empty($this->settings->email_footer_bg_color) ? $this->settings->email_footer_bg_color : '#3d3d3d';
+
+        $data['$theme_bg_color'] = ['value' => $bgColor, 'label' => ''];
+        $data['$theme_card_color'] = ['value' => $cardColor, 'label' => ''];
+        $data['$theme_header_bg'] = ['value' => $primaryColor, 'label' => ''];
+        $data['$theme_button_bg'] = ['value' => $secondaryColor, 'label' => ''];
+        $data['$theme_payment_bg'] = ['value' => $paymentBgColor, 'label' => ''];
+        $data['$theme_accent_color'] = ['value' => $accentColor, 'label' => ''];
+        $data['$theme_footer_bg'] = ['value' => $footerBgColor, 'label' => ''];
+
+        $data['$email_bg_color'] = ['value' => $bgColor, 'label' => ''];
+        $data['$email_card_color'] = ['value' => $cardColor, 'label' => ''];
+        $data['$email_header_bg'] = ['value' => $primaryColor, 'label' => ''];
+        $data['$email_button_bg'] = ['value' => $secondaryColor, 'label' => ''];
+        $data['$email_payment_bg'] = ['value' => $paymentBgColor, 'label' => ''];
+        $data['$email_accent_color'] = ['value' => $accentColor, 'label' => ''];
+        $data['$email_footer_bg'] = ['value' => $footerBgColor, 'label' => ''];
+
+        $data['$asaas_linha_digitavel'] = ['value' => 'Disponível no link de pagamento', 'label' => ''];
+        $data['$asaas_pix_payload'] = ['value' => 'Disponível no link de pagamento', 'label' => ''];
+        try {
+            if ($this->entity instanceof \App\Models\Invoice && (float) $this->entity->balance > 0) {
+                $service = \App\Services\Asaas\AsaasBoletoService::forInvoice($this->entity);
+                if ($service->isAvailable()) {
+                    $boletoData = $service->resolve();
+                    $pixData = $service->resolvePix();
+                    if (!empty($boletoData['linha_digitavel'])) {
+                        $data['$asaas_linha_digitavel'] = ['value' => $boletoData['linha_digitavel'], 'label' => ''];
+                    }
+                    if (!empty($pixData['payload'])) {
+                        $data['$asaas_pix_payload'] = ['value' => $pixData['payload'], 'label' => ''];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            nlog('Asaas variables resolution skipped: ' . $e->getMessage());
+        }
+
         $data['$company1'] = ['value' => $this->helpers->formatCustomFieldValue($this->company->custom_fields, 'company1', $this->settings->custom_value1, $this->client) ?: ' ', 'label' => $this->helpers->makeCustomField($this->company->custom_fields, 'company1')];
         $data['$company2'] = ['value' => $this->helpers->formatCustomFieldValue($this->company->custom_fields, 'company2', $this->settings->custom_value2, $this->client) ?: ' ', 'label' => $this->helpers->makeCustomField($this->company->custom_fields, 'company2')];
         $data['$company3'] = ['value' => $this->helpers->formatCustomFieldValue($this->company->custom_fields, 'company3', $this->settings->custom_value3, $this->client) ?: ' ', 'label' => $this->helpers->makeCustomField($this->company->custom_fields, 'company3')];
