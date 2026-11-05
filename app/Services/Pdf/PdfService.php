@@ -234,6 +234,16 @@ class PdfService
                 return $html;
             }
 
+            $fitStyle = '<style id="asaas-print-fit">'
+                . '.asaas-payment-block { page-break-inside: avoid; }'
+                . '#footer, #footer-spacer { height: 90px !important; margin-top: 0 !important; }'
+                . 'body { zoom: 73% !important; }'
+                . '</style>';
+
+            if (stripos($html, '</head>') !== false) {
+                $html = str_ireplace('</head>', $fitStyle . '</head>', $html);
+            }
+
             if (preg_match('/<table[^>]*id=["\']spacer-table["\'][^>]*>/i', $html) && preg_match('/<\/tbody>\s*<tfoot/i', $html)) {
                 $row = '<tr><td style="padding: 0 1rem;">' . $block . '</td></tr>' . PHP_EOL;
                 $html = preg_replace('/(<\/tbody>\s*<tfoot)/i', $row . '$1', $html, 1);

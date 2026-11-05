@@ -131,35 +131,37 @@ class AsaasPaymentBlock
 
     public static function buildHtml(Invoice $invoice, ?array $boleto, ?array $pix): string
     {
-        $cells = '';
+        $blocks = '';
 
         if ($boleto) {
-            $cells .= static::boletoCell($boleto);
+            $blocks .= static::boletoBlock($boleto);
         }
 
         if ($pix) {
-            $cells .= static::pixCell($pix);
+            if ($blocks !== '') {
+                $blocks .= '<div style="height:5px;"></div>';
+            }
+            $blocks .= static::pixBlock($pix);
         }
 
-        if ($cells === '') {
+        if ($blocks === '') {
             return '';
         }
 
-        $amount = Number::formatMoney($boleto['value'] ?? ($pix['value'] ?? $invoice->balance), $invoice->client);
+        $rawAmount = (float) ($boleto['value'] ?? ($pix['value'] ?? $invoice->balance));
+        $amount = $invoice->client ? Number::formatMoney($rawAmount, $invoice->client) : 'R$ ' . number_format($rawAmount, 2, ',', '.');
 
-        return '<div class="asaas-payment-block" style="page-break-inside:avoid;margin-top:18px;padding-top:12px;border-top:2px solid #e5e7eb;">'
-            . '<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:#374151;">'
+        return '<div class="asaas-payment-block" style="page-break-inside:avoid;margin-top:6px;padding-top:4px;border-top:1px solid #e5e7eb;">'
+            . '<div style="margin-bottom:4px;font-size:10.5px;font-weight:700;color:#374151;">'
             . 'Formas de pagamento &mdash; Asaas'
             . ($invoice->number ? ' &middot; Fatura ' . e($invoice->number) : '')
             . ' &middot; Valor: ' . e($amount)
             . '</div>'
-            . '<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px 0;"><tr>'
-            . $cells
-            . '</tr></table>'
+            . $blocks
             . '</div>';
     }
 
-    private static function boletoCell(array $boleto): string
+    private static function boletoBlock(array $boleto): string
     {
         $linha = (string) ($boleto['linha_digitavel'] ?? '');
         $barcode = (string) ($boleto['barcode'] ?? '');
@@ -169,27 +171,40 @@ class AsaasPaymentBlock
         $barcodeDigits = preg_replace('/\D/', '', $barcode !== '' ? $barcode : $linha);
         $barcodeImg = $barcodeDigits !== ''
             ? '<img src="data:image/png;base64,' . static::barcodePngDataUri($barcodeDigits) . '"'
-                . ' alt="Código de barras" style="width:100%;max-width:320px;height:55px;display:block;margin:6px 0;" />'
+                . ' alt="Código de barras" style="width:100%;height:48px;display:block;margin:3px 0;image-rendering:pixelated;" />'
             : '';
 
         $barcodeInfo = ($barcode !== '' && $barcode !== $linha)
-            ? '<div style="font-size:8px;color:#6b7280;margin-top:2px;">C&oacute;digo de barras: <span style="font-family:courier,monospace;color:#374151;">' . e($barcode) . '</span></div>'
+            ? '<div style="font-size:7.5px;color:#6b7280;margin-top:2px;text-align:center;">C&oacute;digo de barras: <span style="font-family:courier,monospace;color:#374151;">' . e($barcode) . '</span></div>'
             : '';
 
-        return '<td width="50%" valign="top" style="width:50%;border:1px solid #e5e7eb;border-radius:6px;padding:10px;box-sizing:border-box;">'
-            . '<div style="font-size:11px;font-weight:700;color:#b45309;margin-bottom:6px;">Boleto banc&aacute;rio</div>'
-            . '<div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;">Linha digit&aacute;vel</div>'
-            . '<div style="font-family:courier,monospace;font-size:10px;letter-spacing:.3px;word-wrap:break-word;overflow-wrap:break-word;word-break:break-all;margin-bottom:4px;color:#111827;font-weight:600;">' . e($linha !== '' ? $linha : ($barcode !== '' ? $barcode : '&mdash;')) . '</div>'
+        $metaRight = [];
+        if ($due !== '') {
+            $metaRight[] = 'Vencimento: <b>' . e($due) . '</b>';
+        }
+        if ($value !== '') {
+            $metaRight[] = 'Valor: <b>' . e($value) . '</b>';
+        }
+        $metaRightHtml = ! empty($metaRight)
+            ? '<td align="right" style="font-size:9.5px;color:#374151;">' . implode(' &nbsp;&middot;&nbsp; ', $metaRight) . '</td>'
+            : '';
+
+        return '<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="width:100%;border:1px solid #e5e7eb;border-radius:4px;padding:6px 8px;box-sizing:border-box;background:#ffffff;">'
+            . '<tr><td>'
+            . '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:3px;"><tr>'
+            . '<td align="left" style="font-size:10.5px;font-weight:700;color:#b45309;">Boleto banc&aacute;rio</td>'
+            . $metaRightHtml
+            . '</tr></table>'
+            . '<div style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;">Linha digit&aacute;vel</div>'
+            . '<div style="font-family:courier,monospace;font-size:10px;letter-spacing:.3px;word-wrap:break-word;overflow-wrap:break-word;word-break:break-all;margin-bottom:3px;color:#111827;font-weight:700;background:#f9fafb;padding:3px 6px;border-radius:3px;border:1px solid #e5e7eb;">' . e($linha !== '' ? $linha : ($barcode !== '' ? $barcode : '&mdash;')) . '</div>'
+            . '<div style="width:100%;text-align:center;overflow:hidden;margin:3px 0;">'
             . $barcodeImg
-            . $barcodeInfo
-            . '<div style="font-size:9px;color:#6b7280;margin-top:4px;">'
-            . ($due !== '' ? '<div>Vencimento: <b>' . e($due) . '</b></div>' : '')
-            . ($value !== '' ? '<div>Valor: <b>' . e($value) . '</b></div>' : '')
             . '</div>'
-            . '</td>';
+            . $barcodeInfo
+            . '</td></tr></table>';
     }
 
-    private static function pixCell(array $pix): string
+    private static function pixBlock(array $pix): string
     {
         $image = (string) ($pix['encoded_image'] ?? '');
         $payload = (string) ($pix['payload'] ?? '');
@@ -200,18 +215,33 @@ class AsaasPaymentBlock
             : '';
 
         $qr = $imgSrc !== ''
-            ? '<img src="' . $imgSrc . '" alt="QR Code Pix" style="width:120px;height:120px;display:block;margin:6px 0;" />'
+            ? '<img src="' . $imgSrc . '" alt="QR Code Pix" style="width:82px;height:82px;display:block;border:1px solid #e5e7eb;border-radius:3px;padding:2px;background:#ffffff;" />'
             : '';
 
-        return '<td width="50%" valign="top" style="width:50%;border:1px solid #e5e7eb;border-radius:6px;padding:10px;box-sizing:border-box;">'
-            . '<div style="font-size:11px;font-weight:700;color:#047857;margin-bottom:6px;">Pix</div>'
-            . $qr
+        $qrCell = $qr !== ''
+            ? '<td width="92" valign="top" style="width:92px;padding-right:8px;">'
+                . '<div style="font-size:10px;font-weight:700;color:#047857;margin-bottom:4px;">Pix (QR Code)</div>'
+                . $qr
+                . '</td>'
+            : '';
+
+        $pixHeaderTitle = $qr !== '' ? '' : '<div style="font-size:10px;font-weight:700;color:#047857;margin-bottom:4px;">Pix</div>';
+
+        return '<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="width:100%;border:1px solid #e5e7eb;border-radius:4px;padding:6px 8px;box-sizing:border-box;background:#ffffff;">'
+            . '<tr>'
+            . $qrCell
+            . '<td valign="top">'
+            . $pixHeaderTitle
+            . '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+            . '<td align="left" style="font-size:9.5px;color:#374151;">Pague escaneando o QR Code ao lado pelo app do seu banco ou use o Copia e Cola:</td>'
+            . ($due !== '' ? '<td align="right" style="font-size:9.5px;color:#374151;white-space:nowrap;padding-left:6px;">Vencimento: <b>' . e($due) . '</b></td>' : '')
+            . '</tr></table>'
             . ($payload !== ''
-                ? '<div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;">C&oacute;digo Pix (Copia e Cola)</div>'
-                    . '<div style="font-family:courier,monospace;font-size:8px;word-wrap:break-word;overflow-wrap:break-word;word-break:break-all;color:#374151;background:#f9fafb;padding:4px 6px;border-radius:4px;border:1px solid #e5e7eb;margin-top:2px;">' . e($payload) . '</div>'
+                ? '<div style="font-size:8px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;margin-top:4px;margin-bottom:2px;">C&oacute;digo Pix (Copia e Cola)</div>'
+                    . '<div style="font-family:courier,monospace;font-size:7.5px;word-wrap:break-word;overflow-wrap:break-word;word-break:break-all;color:#374151;background:#f9fafb;padding:4px 6px;border-radius:3px;border:1px solid #e5e7eb;line-height:1.25;">' . e($payload) . '</div>'
                 : '')
-            . ($due !== '' ? '<div style="font-size:9px;color:#6b7280;margin-top:4px;">Vencimento: <b>' . e($due) . '</b></div>' : '')
-            . '</td>';
+            . '</td>'
+            . '</tr></table>';
     }
 
     /**
