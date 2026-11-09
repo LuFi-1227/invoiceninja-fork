@@ -44,6 +44,7 @@ import { or } from './guards/guards/or';
 import { permission } from './guards/guards/permission';
 
 const Dashboard = lazy(() => import('$app/pages/dashboard/Dashboard'));
+const Cashbook = lazy(() => import('$app/pages/cashbook/Cashbook'));
 const CalendarConnectionComplete = lazy(
   () => import('$app/pages/tasks/calendar/Complete')
 );
@@ -62,6 +63,10 @@ export const routes = (
             component={<Dashboard />}
           />
         }
+      />
+      <Route
+        path="/cashbook"
+        element={<Cashbook />}
       />
       {invoiceRoutes}
       {clientRoutes}

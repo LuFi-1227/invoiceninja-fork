@@ -6389,6 +6389,7 @@ $lang = array(
     'municipal_service_code' => 'Municipal Service Code',
     'emit_nota_fiscal' => 'Issue Invoice (NFS-e)',
     'emit_nota_fiscal_help' => 'Issue Nota Fiscal (Asaas) for invoices assigned to this user',
+    'cashbook' => 'Cash Book',
 );
 
 return $lang;

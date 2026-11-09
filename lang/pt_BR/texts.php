@@ -6391,6 +6391,7 @@ Quando tiver as quantias, volte a esta página de formas de pagamento e clique "
     'municipal_service_code' => 'Código do Serviço Municipal',
     'emit_nota_fiscal' => 'Emitir Nota Fiscal',
     'emit_nota_fiscal_help' => 'Emitir Nota Fiscal (Asaas) para cobranças vinculadas a este usuário',
+    'cashbook' => 'Livro Caixa',
 );
 
 return $lang;

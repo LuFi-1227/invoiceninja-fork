@@ -12,6 +12,7 @@ import { useCurrentCompany } from '$app/common/hooks/useCurrentCompany';
 import { useCurrentCompanyUser } from '$app/common/hooks/useCurrentCompanyUser';
 import { useResolvedShortcuts } from '$app/common/hooks/useReactSettings';
 import { ArrowsTransaction } from '$app/components/icons/ArrowsTransaction';
+import { BookOpen } from '$app/components/icons/BookOpen';
 import { ChartLine } from '$app/components/icons/ChartLine';
 import { ClipboardCheck } from '$app/components/icons/ClipboardCheck';
 import { CreditCard } from '$app/components/icons/CreditCard';
@@ -58,6 +59,15 @@ export function useNavigation() {
       href: '/dashboard',
       icon: House,
       visible: hasPermission('view_dashboard'),
+    },
+    {
+      name: t('cashbook', { defaultValue: 'Livro Caixa' }),
+      href: '/cashbook',
+      icon: BookOpen,
+      visible:
+        hasPermission('view_dashboard') ||
+        hasPermission('view_payment') ||
+        hasPermission('view_expense'),
     },
     {
       name: t('clients'),

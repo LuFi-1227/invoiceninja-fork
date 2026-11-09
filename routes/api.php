@@ -425,6 +425,8 @@ Route::group(['middleware' => ['throttle:api', 'token_auth', 'valid_json','local
     Route::post('reports/product_sales', ProductSalesReportController::class)->middleware('throttle:20,1');
     Route::post('reports/tasks', TaskReportController::class)->middleware('throttle:20,1');
     Route::post('reports/vendors', VendorReportController::class)->middleware('throttle:20,1');
+    Route::get('cashbook', [\App\Http\Controllers\CashbookController::class, 'index'])->name('cashbook.index');
+    Route::get('cashbook/export', [\App\Http\Controllers\CashbookController::class, 'export'])->name('cashbook.export');
     Route::post('reports/profitloss', ProfitAndLossController::class);
     Route::post('reports/ar_detail_report', ARDetailReportController::class);
     Route::post('reports/ar_summary_report', ARSummaryReportController::class);
