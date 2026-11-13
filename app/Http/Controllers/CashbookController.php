@@ -108,6 +108,34 @@ class CashbookController extends BaseController
         $search = trim($request->input('search', ''));
         $type = $request->input('type', 'all'); // 'all', 'income', 'expense'
 
+        // Obter timezone da empresa para garantir horários locais exatos
+        $tz = 'America/Sao_Paulo';
+        if ($company) {
+            try {
+                $tz = $company->timezone()->name ?? 'America/Sao_Paulo';
+            } catch (\Throwable $e) {
+                $tz = 'America/Sao_Paulo';
+            }
+        }
+
+        // Função utilitária para converter timestamps (Carbon, Unix timestamp int ou string) para Carbon com timezone
+        $resolveCarbon = function ($val) use ($tz) {
+            if (empty($val)) {
+                return null;
+            }
+            if ($val instanceof \Carbon\Carbon) {
+                return $val->copy()->setTimezone($tz);
+            }
+            if (is_numeric($val)) {
+                return \Carbon\Carbon::createFromTimestamp($val, $tz);
+            }
+            try {
+                return \Carbon\Carbon::parse($val)->setTimezone($tz);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+
         $transactions = [];
 
         // 1. Ganhos / Entradas (Payments)
@@ -139,7 +167,12 @@ class CashbookController extends BaseController
 
             foreach ($payments as $payment) {
                 $netAmount = (float) ($payment->amount - $payment->refunded);
-                $date = $payment->date ? substr($payment->date, 0, 10) : ($payment->created_at ? $payment->created_at->format('Y-m-d') : date('Y-m-d'));
+                
+                // Resolver data e hora de chegada com timezone da empresa
+                $createdTz = $resolveCarbon($payment->created_at);
+                $date = $payment->date ? substr($payment->date, 0, 10) : ($createdTz ? $createdTz->format('Y-m-d') : date('Y-m-d'));
+                $time = $createdTz ? $createdTz->format('H:i:s') : '00:00:00';
+                $datetime = $date . ' ' . $time;
 
                 $transactions[] = [
                     'id' => 'income_' . $payment->id,
@@ -147,6 +180,9 @@ class CashbookController extends BaseController
                     'type' => 'income',
                     'type_label' => 'Ganho',
                     'date' => $date,
+                    'datetime' => $datetime,
+                    'time' => substr($time, 0, 5),
+                    'created_at' => $createdTz ? $createdTz->toDateTimeString() : $datetime,
                     'amount' => $netAmount,
                     'gross_amount' => (float) $payment->amount,
                     'refunded' => (float) $payment->refunded,
@@ -192,7 +228,12 @@ class CashbookController extends BaseController
 
             foreach ($expenses as $expense) {
                 $amount = (float) $expense->amount;
-                $date = $expense->date ? substr($expense->date, 0, 10) : ($expense->payment_date ? substr($expense->payment_date, 0, 10) : ($expense->created_at ? $expense->created_at->format('Y-m-d') : date('Y-m-d')));
+
+                // Resolver data e hora de chegada com timezone da empresa
+                $createdTz = $resolveCarbon($expense->created_at);
+                $date = $expense->date ? substr($expense->date, 0, 10) : ($expense->payment_date ? substr($expense->payment_date, 0, 10) : ($createdTz ? $createdTz->format('Y-m-d') : date('Y-m-d')));
+                $time = $createdTz ? $createdTz->format('H:i:s') : '00:00:00';
+                $datetime = $date . ' ' . $time;
 
                 $desc = $expense->vendor ? $expense->vendor->name : ($expense->category ? $expense->category->name : ($expense->public_notes ?: 'Despesa'));
                 $cat = $expense->category ? $expense->category->name : ($expense->payment_type ? $expense->payment_type->name : 'Despesa');
@@ -203,6 +244,9 @@ class CashbookController extends BaseController
                     'type' => 'expense',
                     'type_label' => 'Despesa',
                     'date' => $date,
+                    'datetime' => $datetime,
+                    'time' => substr($time, 0, 5),
+                    'created_at' => $createdTz ? $createdTz->toDateTimeString() : $datetime,
                     'amount' => $amount,
                     'gross_amount' => $amount,
                     'refunded' => 0.0,
@@ -216,11 +260,11 @@ class CashbookController extends BaseController
             }
         }
 
-        // Ordenar cronologicamente crescente para calcular saldo acumulado (running balance)
+        // Ordenar cronologicamente crescente por data e horário exato de chegada para calcular saldo acumulado (running balance)
         usort($transactions, function ($a, $b) {
-            $cmp = strcmp($a['date'], $b['date']);
+            $cmp = strcmp($a['datetime'], $b['datetime']);
             if ($cmp === 0) {
-                return strcmp($a['id'], $b['id']);
+                return $a['raw_id'] <=> $b['raw_id'];
             }
             return $cmp;
         });
@@ -370,7 +414,7 @@ class CashbookController extends BaseController
         // 4. Cabeçalho da Tabela
         $row = 6;
         $headers = [
-            'A' => 'Data',
+            'A' => 'Data / Horário',
             'B' => 'Tipo',
             'C' => 'Descrição / Contato',
             'D' => 'Categoria / Forma',
@@ -392,7 +436,7 @@ class CashbookController extends BaseController
         // 5. Linhas de Dados
         $row++;
         foreach ($data['items'] as $item) {
-            $dateFormatted = Carbon::parse($item['date'])->format('d/m/Y');
+            $dateFormatted = Carbon::parse($item['datetime'] ?? $item['date'])->format('d/m/Y H:i');
             $sheet->setCellValue("A{$row}", $dateFormatted);
             $sheet->setCellValue("B{$row}", $item['type_label']);
             $sheet->setCellValue("C{$row}", $item['description']);
@@ -489,7 +533,7 @@ class CashbookController extends BaseController
 
         $rowsHtml = '';
         foreach ($data['items'] as $item) {
-            $date = Carbon::parse($item['date'])->format('d/m/Y');
+            $date = Carbon::parse($item['datetime'] ?? $item['date'])->format('d/m/Y H:i');
             $isIncome = $item['type'] === 'income';
             $badgeColor = $isIncome ? '#16a34a' : '#dc2626';
             $badgeBg = $isIncome ? '#dcfce7' : '#fee2e2';
@@ -591,7 +635,7 @@ class CashbookController extends BaseController
             <table class=\"table-main\">
                 <thead>
                     <tr>
-                        <th style=\"width:70px;\">Data</th>
+                        <th style=\"width:105px;\">Data / Horário</th>
                         <th style=\"width:65px;\">Tipo</th>
                         <th>Descrição / Contato</th>
                         <th>Categoria / Forma</th>
@@ -632,5 +676,65 @@ class CashbookController extends BaseController
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
+    }
+
+    /**
+     * Sincronizar transações da Asaas diretamente a partir do Livro Caixa.
+     * POST /api/v1/cashbook/sync_asaas
+     * Suporta: mode = 'both' | 'income' | 'expense'
+     */
+    public function syncAsaas(Request $request): JsonResponse
+    {
+        $company = $this->resolveCompany($request);
+        [$startDate, $endDate, $period] = $this->resolveDates($request);
+
+        $mode = $request->input('mode', 'both'); // 'both', 'income', 'expense'
+        $allTime = ($period === 'all');
+
+        $options = [
+            'start_date' => $startDate,
+            'finish_date' => $endDate,
+            'all_time' => $allTime,
+            'auto_create_client' => true,
+            'auto_create_vendor' => true,
+        ];
+
+        $results = [
+            'success' => true,
+            'company_id' => $company->id,
+            'mode' => $mode,
+            'period' => $period,
+            'income' => null,
+            'expense' => null,
+        ];
+
+        // Sincronizar Ganhos (Incomes / Recebimentos)
+        if ($mode === 'both' || $mode === 'income') {
+            $incomeService = \App\Services\Asaas\AsaasIncomeService::forCompany($company);
+            $incomeResult = $incomeService->sync($options);
+            $results['income'] = $incomeResult;
+            if (! ($incomeResult['success'] ?? false)) {
+                $results['success'] = false;
+            }
+        }
+
+        // Sincronizar Débitos / Despesas (Expenses)
+        if ($mode === 'both' || $mode === 'expense') {
+            $expenseService = \App\Services\Asaas\AsaasCardExpenseService::forCompany($company);
+            $expenseResult = $expenseService->sync($options);
+            $results['expense'] = $expenseResult;
+            if (! ($expenseResult['success'] ?? false)) {
+                $results['success'] = false;
+            }
+        }
+
+        $totalCreated = ($results['income']['created'] ?? 0) + ($results['expense']['created'] ?? 0);
+        $totalSkipped = ($results['income']['skipped'] ?? 0) + ($results['expense']['skipped'] ?? 0);
+        $incomeCreated = $results['income']['created'] ?? 0;
+        $expenseCreated = $results['expense']['created'] ?? 0;
+
+        $results['message'] = "Sincronização Asaas concluída: {$incomeCreated} ganhos e {$expenseCreated} despesas criadas ({$totalSkipped} já sincronizados anteriormente).";
+
+        return response()->json($results, $results['success'] ? 200 : 207);
     }
 }

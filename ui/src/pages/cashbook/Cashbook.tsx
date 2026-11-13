@@ -41,6 +41,9 @@ export interface CashbookItem {
   type: 'income' | 'expense';
   type_label: string;
   date: string;
+  datetime?: string;
+  time?: string;
+  created_at?: string;
   amount: number;
   gross_amount: number;
   refunded: number;
@@ -121,6 +124,7 @@ export default function Cashbook() {
   const [search, setSearch] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  const [isSyncingAsaas, setIsSyncingAsaas] = useState<boolean>(false);
 
   // Paginação
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -256,6 +260,34 @@ export default function Cashbook() {
     [queryParams, t]
   );
 
+  // Sincronização direta com a API do Asaas (Receitas e Despesas)
+  const handleSyncAsaas = useCallback(
+    (mode: 'both' | 'income' | 'expense' = 'both') => {
+      setIsSyncingAsaas(true);
+      request('POST', endpoint('/api/v1/cashbook/sync_asaas'), {
+        period,
+        start_date: period === 'custom' ? startDate : undefined,
+        end_date: period === 'custom' ? endDate : undefined,
+        mode,
+      })
+        .then((response) => {
+          const resData = response.data;
+          const msg = resData?.message || 'Sincronização com Asaas concluída com sucesso!';
+          toast.success(msg);
+          refetch();
+        })
+        .catch((error) => {
+          console.error('Asaas sync error:', error);
+          const errMsg = error?.response?.data?.message || 'Erro ao sincronizar com Asaas.';
+          toast.error(errMsg);
+        })
+        .finally(() => {
+          setIsSyncingAsaas(false);
+        });
+    },
+    [period, startDate, endDate, refetch]
+  );
+
   // Formatação segura de moeda
   const formatVal = (val: number) => {
     return formatMoney(val, company?.settings.country_id, company?.settings.currency_id);
@@ -270,6 +302,23 @@ export default function Cashbook() {
       ]}
       topRight={
         <div className="flex items-center space-x-2">
+          {/* Botão Sincronizar Asaas */}
+          <button
+            type="button"
+            onClick={() => handleSyncAsaas('both')}
+            disabled={isSyncingAsaas || isFetching}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: '#0284c7' }}
+            title="Sincronizar receitas e despesas diretamente da conta Asaas"
+          >
+            {isSyncingAsaas ? (
+              <span className="inline-flex w-3.5 h-3.5"><Spinner variant="light" /></span>
+            ) : (
+              <RefreshCw size={14} className={classNames({ 'animate-spin': isSyncingAsaas })} />
+            )}
+            <span>Sincronizar Asaas</span>
+          </button>
+
           {/* Botão de Atualizar */}
           <button
             type="button"
@@ -657,7 +706,7 @@ export default function Cashbook() {
                       color: colors.$4,
                     }}
                   >
-                    <th className="py-3 px-4">Data</th>
+                    <th className="py-3 px-4">Data / Horário</th>
                     <th className="py-3 px-4">Tipo</th>
                     <th className="py-3 px-4">Descrição / Contato</th>
                     <th className="py-3 px-4">Categoria / Método</th>
@@ -674,9 +723,14 @@ export default function Cashbook() {
                         key={item.id}
                         className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                       >
-                        {/* Data */}
-                        <td className="py-3 px-4 whitespace-nowrap font-medium text-gray-700 dark:text-gray-300">
-                          {dayjs(item.date).format('DD/MM/YYYY')}
+                        {/* Data e Horário */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="font-semibold text-gray-800 dark:text-gray-200">
+                            {dayjs(item.datetime || item.date).format('DD/MM/YYYY')}
+                          </div>
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
+                            {item.time || dayjs(item.datetime || item.date).format('HH:mm')}
+                          </div>
                         </td>
 
                         {/* Tipo */}

@@ -297,5 +297,7 @@ return [
     'asaas' => [
         'auto_sync_card_expenses' => env('ASAAS_AUTO_SYNC_CARD_EXPENSES', true),
         'card_sync_days' => env('ASAAS_CARD_SYNC_DAYS', 30),
+        'auto_sync_incomes' => env('ASAAS_AUTO_SYNC_INCOMES', true),
+        'income_sync_days' => env('ASAAS_INCOME_SYNC_DAYS', 30),
     ],
 ];

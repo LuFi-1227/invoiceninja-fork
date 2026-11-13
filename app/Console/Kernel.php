@@ -151,6 +151,16 @@ class Kernel extends ConsoleKernel
                 ->onOneServer();
         }
 
+        /* Pulls in Asaas customer payments / incomes into GestoreMio payments */
+        if (config('ninja.asaas.auto_sync_incomes', true)) {
+            $days = (int) config('ninja.asaas.income_sync_days', 30);
+            $schedule->command("asaas:sync-incomes --days={$days}")
+                ->hourly()
+                ->withoutOverlapping()
+                ->name('asaas-sync-incomes-job')
+                ->onOneServer();
+        }
+
         if (Ninja::isSelfHost()) {
             $schedule->call(function () {
                 Account::query()->whereNotNull('id')->update(['is_scheduler_running' => true]);

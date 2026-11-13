@@ -338,6 +338,7 @@ Route::group(['middleware' => ['throttle:api', 'token_auth', 'valid_json','local
     Route::get('invoices/{invoice}/whatsapp/boleto', [WhatsAppController::class, 'showBoletoPdf'])->name('invoices.whatsapp.boleto');
     Route::post('invoices/{invoice}/emit_asaas_nfe', [InvoiceController::class, 'emitAsaasNotaFiscal'])->name('invoices.emit_asaas_nfe');
     Route::post('asaas/sync_card_expenses', [\App\Http\Controllers\AsaasCardExpenseController::class, 'sync'])->name('asaas.sync_card_expenses');
+    Route::post('asaas/sync_incomes', [\App\Http\Controllers\AsaasIncomeController::class, 'sync'])->name('asaas.sync_incomes');
 
     Route::resource('locations', LocationController::class); // name = (locations. index / create / show / update / destroy / edit
     Route::post('locations/bulk', [LocationController::class, 'bulk'])->name('locations.bulk');
@@ -426,6 +427,7 @@ Route::group(['middleware' => ['throttle:api', 'token_auth', 'valid_json','local
     Route::post('reports/tasks', TaskReportController::class)->middleware('throttle:20,1');
     Route::post('reports/vendors', VendorReportController::class)->middleware('throttle:20,1');
     Route::get('cashbook', [\App\Http\Controllers\CashbookController::class, 'index'])->name('cashbook.index');
+    Route::post('cashbook/sync_asaas', [\App\Http\Controllers\CashbookController::class, 'syncAsaas'])->name('cashbook.sync_asaas');
     Route::get('cashbook/export', [\App\Http\Controllers\CashbookController::class, 'export'])->name('cashbook.export');
     Route::post('reports/profitloss', ProfitAndLossController::class);
     Route::post('reports/ar_detail_report', ARDetailReportController::class);
@@ -549,6 +551,10 @@ Route::match(['get', 'post'], 'payment_notification_webhook/{company_key}/{compa
 Route::match(['get', 'post'], 'webhooks/asaas/sync_card_expenses/{company_key}', [\App\Http\Controllers\AsaasCardExpenseController::class, 'webhookSync'])
     ->middleware('throttle:1000,1')
     ->name('webhooks.asaas.sync_card_expenses');
+
+Route::match(['get', 'post'], 'webhooks/asaas/sync_incomes/{company_key}', [\App\Http\Controllers\AsaasIncomeController::class, 'webhookSync'])
+    ->middleware('throttle:1000,1')
+    ->name('webhooks.asaas.sync_incomes');
 
 Route::post('api/v1/postmark_webhook', [PostMarkController::class, 'webhook'])->middleware('throttle:5000,1');
 Route::post('api/v1/sns_webhook', [SNSController::class, 'webhook'])->middleware('throttle:5000,1');

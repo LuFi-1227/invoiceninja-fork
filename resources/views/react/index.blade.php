@@ -28,7 +28,7 @@
     <link rel="shortcut icon" href="/favicon.ico?v=gestoremio" />
     <link rel="apple-touch-icon" href="/logo180.png?v=gestoremio" />
     <link rel="manifest" href="/manifest.json" />
-    <script type="module" crossorigin src="/bundle.CzuSnIxf.js"></script>
+    <script type="module" crossorigin src="/bundle.BkYN82DY.js"></script>
     <link rel="modulepreload" crossorigin href="/rolldown-runtime-CNC7AqOf.js">
     <link rel="modulepreload" crossorigin href="/react-Augu_vA3.js">
     <link rel="modulepreload" crossorigin href="/jsx-runtime-CTknu7_t.js">
@@ -157,7 +157,7 @@
     <link rel="modulepreload" crossorigin href="/dist-ItKxkH-G.js">
     <link rel="modulepreload" crossorigin href="/editor.api-D67F9Akq.js">
     <link rel="modulepreload" crossorigin href="/monaco.contribution-GvmOpcHO.js">
-    <link rel="modulepreload" crossorigin href="/src-D6ZkK6Px.js">
+    <link rel="modulepreload" crossorigin href="/src-D3OLPcng.js">
     <link rel="stylesheet" crossorigin href="/forms-CZOhJl4e.css">
     <link rel="stylesheet" crossorigin href="/editor-BjLDz43t.css">
     <link rel="stylesheet" crossorigin href="/src-Cj9AWcAa.css">
