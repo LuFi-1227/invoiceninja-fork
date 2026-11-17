@@ -30,28 +30,30 @@ class AsaasSyncCardExpenses extends Command
                             {--start-date= : Custom start date (YYYY-MM-DD)}
                             {--finish-date= : Custom finish date (YYYY-MM-DD)}
                             {--all-time : Sync all transactions without date boundaries}
-                            {--category=Cartão Asaas : Category name to group the expenses}';
+                            {--category=Cartão Asaas : Category name to group the card expenses}
+                            {--fee-category=Taxas Asaas : Category name to group internal fee expenses (e.g. R$ 1,99)}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Synchronize Asaas debit card expenses into GestoreMio expenses';
+    protected $description = 'Synchronize Asaas debit card expenses and internal fees (e.g. R$ 1,99 per received payment) into GestoreMio expenses';
 
     /**
      * Execute the console command.
      */
     public function handle(): int
     {
-        $this->info('Starting Asaas card expenses synchronization...');
+        $this->info('Starting Asaas card expenses and internal fees synchronization...');
 
         $companyId = $this->option('company');
         $days = (int) $this->option('days');
         $startDate = $this->option('start-date');
         $finishDate = $this->option('finish-date');
         $allTime = (bool) $this->option('all-time');
-        $categoryName = (string) $this->option('category');
+        $categoryName = (string) ($this->option('category') ?: 'Cartão Asaas');
+        $feeCategoryName = (string) ($this->option('fee-category') ?: 'Taxas Asaas');
 
         $options = [
             'days' => $days,
@@ -59,6 +61,7 @@ class AsaasSyncCardExpenses extends Command
             'finish_date' => $finishDate,
             'all_time' => $allTime,
             'category_name' => $categoryName,
+            'fee_category_name' => $feeCategoryName,
         ];
 
         if ($companyId) {
@@ -114,7 +117,10 @@ class AsaasSyncCardExpenses extends Command
             $overallSkipped += $skipped;
             $overallScanned += $scanned;
 
-            $this->info(" -> Scanned: {$scanned} | Created: {$created} | Skipped: {$skipped}");
+            $createdCard = $result['created_card'] ?? 0;
+            $createdFees = $result['created_fees'] ?? 0;
+
+            $this->info(" -> Scanned: {$scanned} | Created: {$created} (Card: {$createdCard}, Fees: {$createdFees}) | Skipped: {$skipped}");
         }
 
         $this->newLine();

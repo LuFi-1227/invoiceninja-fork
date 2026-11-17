@@ -732,8 +732,10 @@ class CashbookController extends BaseController
         $totalSkipped = ($results['income']['skipped'] ?? 0) + ($results['expense']['skipped'] ?? 0);
         $incomeCreated = $results['income']['created'] ?? 0;
         $expenseCreated = $results['expense']['created'] ?? 0;
+        $expenseFees = $results['expense']['created_fees'] ?? 0;
 
-        $results['message'] = "Sincronização Asaas concluída: {$incomeCreated} ganhos e {$expenseCreated} despesas criadas ({$totalSkipped} já sincronizados anteriormente).";
+        $feeDetail = $expenseFees > 0 ? " (incluindo {$expenseFees} taxas/tarifas Asaas)" : '';
+        $results['message'] = "Sincronização Asaas concluída: {$incomeCreated} ganhos e {$expenseCreated} despesas criadas{$feeDetail} ({$totalSkipped} já sincronizados anteriormente).";
 
         return response()->json($results, $results['success'] ? 200 : 207);
     }

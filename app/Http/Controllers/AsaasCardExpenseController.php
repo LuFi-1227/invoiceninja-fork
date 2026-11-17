@@ -44,7 +44,9 @@ class AsaasCardExpenseController extends BaseController
             'start_date',
             'finish_date',
             'all_time',
+            'types',
             'category_name',
+            'fee_category_name',
             'auto_create_vendor',
         ]);
 
@@ -91,7 +93,9 @@ class AsaasCardExpenseController extends BaseController
             'start_date',
             'finish_date',
             'all_time',
+            'types',
             'category_name',
+            'fee_category_name',
             'auto_create_vendor',
         ]);
 

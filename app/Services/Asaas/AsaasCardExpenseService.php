@@ -37,11 +37,54 @@ class AsaasCardExpenseService
     /** Gateway key for Asaas */
     public const GATEWAY_KEY = '07e4d88e0bbf4ad1b7dfeb21434c76b7';
 
-    /** Transaction types considered card expenses by default */
-    public const DEFAULT_CARD_TYPES = [
+    /** Card transaction types */
+    public const CARD_TYPES = [
         'ASAAS_CARD_TRANSACTION',
         'ASAAS_CARD_TRANSACTION_FEE',
+        'ASAAS_CARD_RECHARGE_FEE',
     ];
+
+    /** Fee types (taxas e tarifas internas cobradas pelo Asaas) */
+    public const FEE_TYPES = [
+        'PAYMENT_FEE',                        // Tarifa sobre cobrança recebida (Boleto, Pix, Cartão - ex: 1,99)
+        'PAYMENT_MESSAGING_NOTIFICATION_FEE', // Tarifa de envio de mensagem de cobrança
+        'PAYMENT_SMS_NOTIFICATION_FEE',       // Tarifa de envio de notificação por SMS
+        'INSTANT_TEXT_MESSAGE_FEE',           // Tarifa de envio de notificação por WhatsApp
+        'PHONE_CALL_NOTIFICATION_FEE',        // Tarifa de chamada de voz
+        'POSTAL_SERVICE_FEE',                 // Tarifa de envio pelos Correios
+        'TRANSFER_FEE',                       // Tarifa de transferência Pix / TED
+        'BILL_PAYMENT_FEE',                   // Tarifa de pagamento de contas
+        'INVOICE_FEE',                        // Tarifa de emissão de NF-e / NFS-e
+        'PAYMENT_DUNNING_REQUEST_FEE',        // Tarifa de negativação Serasa
+        'PAYMENT_DUNNING_RECEIVED_FEE',       // Tarifa de recuperação Serasa
+        'MONTHLY_FEE',                        // Mensalidade da conta / plano Asaas
+        'ASAAS_DEBIT_CARD_REQUEST_FEE',       // Tarifa de solicitação de cartão de débito
+        'ASAAS_PREPAID_CARD_REQUEST_FEE',     // Tarifa de solicitação de cartão pré-pago
+    ];
+
+    /** All default expense types synchronized */
+    public const DEFAULT_EXPENSE_TYPES = [
+        'ASAAS_CARD_TRANSACTION',
+        'ASAAS_CARD_TRANSACTION_FEE',
+        'ASAAS_CARD_RECHARGE_FEE',
+        'PAYMENT_FEE',
+        'PAYMENT_MESSAGING_NOTIFICATION_FEE',
+        'PAYMENT_SMS_NOTIFICATION_FEE',
+        'INSTANT_TEXT_MESSAGE_FEE',
+        'PHONE_CALL_NOTIFICATION_FEE',
+        'POSTAL_SERVICE_FEE',
+        'TRANSFER_FEE',
+        'BILL_PAYMENT_FEE',
+        'INVOICE_FEE',
+        'PAYMENT_DUNNING_REQUEST_FEE',
+        'PAYMENT_DUNNING_RECEIVED_FEE',
+        'MONTHLY_FEE',
+        'ASAAS_DEBIT_CARD_REQUEST_FEE',
+        'ASAAS_PREPAID_CARD_REQUEST_FEE',
+    ];
+
+    /** Backwards-compatibility alias for DEFAULT_EXPENSE_TYPES */
+    public const DEFAULT_CARD_TYPES = self::DEFAULT_EXPENSE_TYPES;
 
     private ?CompanyGateway $gateway = null;
     private ?AsaasApi $api = null;
@@ -158,8 +201,9 @@ class AsaasCardExpenseService
         $allTime = filter_var($options['all_time'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $startDate = $options['start_date'] ?? ($allTime ? null : Carbon::now()->subDays($days)->format('Y-m-d'));
         $finishDate = $options['finish_date'] ?? ($allTime ? null : Carbon::now()->format('Y-m-d'));
-        $types = $options['types'] ?? self::DEFAULT_CARD_TYPES;
+        $types = $options['types'] ?? self::DEFAULT_EXPENSE_TYPES;
         $categoryName = (string) ($options['category_name'] ?? 'Cartão Asaas');
+        $feeCategoryName = (string) ($options['fee_category_name'] ?? 'Taxas Asaas');
         $autoCreateVendor = filter_var($options['auto_create_vendor'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
         $category = null;
@@ -180,10 +224,30 @@ class AsaasCardExpenseService
             }
         }
 
+        $feeCategory = null;
+        if (! empty($feeCategoryName)) {
+            $feeCategory = ExpenseCategory::query()
+                ->where('company_id', $this->company->id)
+                ->where('name', $feeCategoryName)
+                ->first();
+
+            if (! $feeCategory) {
+                $feeCategory = new ExpenseCategory();
+                $feeCategory->company_id = $this->company->id;
+                $feeCategory->user_id = $user->id;
+                $feeCategory->name = $feeCategoryName;
+                $feeCategory->color = '#e05638';
+                $feeCategory->is_deleted = false;
+                $feeCategory->saveQuietly();
+            }
+        }
+
         $currencyId = (int) ($this->company->getSetting('currency_id') ?: 20); // 20 = BRL
 
         $totalScanned = 0;
         $created = 0;
+        $createdCard = 0;
+        $createdFees = 0;
         $skipped = 0;
         $errors = [];
         $offset = 0;
@@ -221,7 +285,12 @@ class AsaasCardExpenseService
                 $totalScanned++;
                 $itemType = (string) ($item['type'] ?? '');
 
-                if (! in_array($itemType, $types, true)) {
+                $isFee = in_array($itemType, self::FEE_TYPES, true) || str_ends_with($itemType, '_FEE');
+
+                $isAllowed = in_array($itemType, $types, true)
+                    || ($types === self::DEFAULT_EXPENSE_TYPES && $isFee);
+
+                if (! $isAllowed) {
                     continue;
                 }
 
@@ -231,7 +300,7 @@ class AsaasCardExpenseService
                 }
 
                 $rawValue = (float) ($item['value'] ?? 0);
-                // In Asaas, debit card expenses are negative (outflow)
+                // In Asaas, debit card expenses and fees are negative (outflow)
                 if ($rawValue == 0) {
                     continue;
                 }
@@ -250,6 +319,7 @@ class AsaasCardExpenseService
                 $amount = abs($rawValue);
                 $date = ! empty($item['date']) ? $item['date'] : Carbon::now()->format('Y-m-d');
                 $description = trim((string) ($item['description'] ?? ''));
+                $paymentId = ! empty($item['paymentId']) ? (string) $item['paymentId'] : null;
 
                 $vendorId = null;
                 if ($autoCreateVendor) {
@@ -270,6 +340,55 @@ class AsaasCardExpenseService
                     }
                 }
 
+                // Associate client / invoice if a corresponding Ninja Payment exists
+                $clientId = null;
+                $invoiceId = null;
+                if ($paymentId) {
+                    $matchedPayment = \App\Models\Payment::query()
+                        ->where('company_id', $this->company->id)
+                        ->where('transaction_reference', $paymentId)
+                        ->first();
+
+                    if ($matchedPayment) {
+                        $clientId = $matchedPayment->client_id;
+                        $firstInvoice = $matchedPayment->invoices()->first();
+                        if ($firstInvoice) {
+                            $invoiceId = $firstInvoice->id;
+                        }
+                    }
+                }
+
+                // Build clean public notes
+                if (! empty($description)) {
+                    $publicNotes = $description;
+                } else {
+                    $publicNotes = match ($itemType) {
+                        'PAYMENT_FEE' => 'Taxa sobre cobrança recebida (Asaas)',
+                        'PAYMENT_MESSAGING_NOTIFICATION_FEE' => 'Taxa de notificação de cobrança (Asaas)',
+                        'PAYMENT_SMS_NOTIFICATION_FEE' => 'Taxa de envio de SMS (Asaas)',
+                        'INSTANT_TEXT_MESSAGE_FEE' => 'Taxa de envio de WhatsApp (Asaas)',
+                        'PHONE_CALL_NOTIFICATION_FEE' => 'Taxa de notificação por voz (Asaas)',
+                        'POSTAL_SERVICE_FEE' => 'Taxa de envio Correios (Asaas)',
+                        'TRANSFER_FEE' => 'Taxa de transferência (Asaas)',
+                        'BILL_PAYMENT_FEE' => 'Taxa de pagamento de contas (Asaas)',
+                        'INVOICE_FEE' => 'Taxa de emissão de NF-e (Asaas)',
+                        'ASAAS_CARD_TRANSACTION_FEE' => 'Taxa de transação de cartão (Asaas)',
+                        'ASAAS_CARD_RECHARGE_FEE' => 'Taxa de recarga de cartão (Asaas)',
+                        'ASAAS_DEBIT_CARD_REQUEST_FEE' => 'Taxa de emissão de cartão de débito (Asaas)',
+                        'ASAAS_PREPAID_CARD_REQUEST_FEE' => 'Taxa de emissão de cartão pré-pago (Asaas)',
+                        'PAYMENT_DUNNING_REQUEST_FEE' => 'Taxa de negativação Serasa (Asaas)',
+                        'PAYMENT_DUNNING_RECEIVED_FEE' => 'Taxa de recuperação Serasa (Asaas)',
+                        'MONTHLY_FEE' => 'Mensalidade da conta Asaas',
+                        default => $isFee ? 'Tarifa interna Asaas' : 'Compra Cartão Débito Asaas',
+                    };
+                }
+
+                if ($paymentId && ! str_contains($publicNotes, $paymentId)) {
+                    $publicNotes .= " ({$paymentId})";
+                }
+
+                $selectedCategory = $isFee ? $feeCategory : $category;
+
                 try {
                     $expense = ExpenseFactory::create($this->company->id, $user->id);
                     $expense->amount = $amount;
@@ -277,17 +396,24 @@ class AsaasCardExpenseService
                     $expense->date = $date;
                     $expense->payment_date = $date;
                     $expense->payment_type_id = PaymentType::DEBIT; // 3 = Debit
-                    $expense->category_id = $category ? $category->id : null;
+                    $expense->category_id = $selectedCategory ? $selectedCategory->id : null;
                     $expense->vendor_id = $vendorId;
+                    $expense->client_id = $clientId;
+                    $expense->invoice_id = $invoiceId;
                     $expense->transaction_reference = $txId;
-                    $expense->public_notes = $description ?: 'Compra Cartão Débito Asaas';
-                    $expense->private_notes = "Sincronizado via Asaas API (ID: {$txId}, Tipo: {$itemType})";
+                    $expense->public_notes = $publicNotes;
+                    $expense->private_notes = "Sincronizado via Asaas API (ID: {$txId}, Tipo: {$itemType}" . ($paymentId ? ", Cobrança: {$paymentId}" : '') . ")";
                     $expense->should_be_invoiced = false;
                     $expense->number = $this->getNextExpenseNumber($expense);
                     $expense->saveQuietly();
 
                     $created++;
-                    Log::info("AsaasCardExpenseService: Expense created for transaction {$txId} (R$ {$amount})");
+                    if ($isFee) {
+                        $createdFees++;
+                    } else {
+                        $createdCard++;
+                    }
+                    Log::info("AsaasCardExpenseService: Expense created for transaction {$txId} (R$ {$amount}, Type: {$itemType})");
                 } catch (\Throwable $e) {
                     Log::error("AsaasCardExpenseService failed creating expense for {$txId}: " . $e->getMessage());
                     $errors[] = "Falha ao criar despesa para transação {$txId}: " . $e->getMessage();
@@ -306,6 +432,8 @@ class AsaasCardExpenseService
             'finish_date' => $finishDate,
             'total_scanned' => $totalScanned,
             'created' => $created,
+            'created_card' => $createdCard,
+            'created_fees' => $createdFees,
             'skipped' => $skipped,
             'errors' => $errors,
         ];
@@ -316,7 +444,7 @@ class AsaasCardExpenseService
      */
     private function extractVendorName(string $description, string $type = ''): string
     {
-        if ($type === 'ASAAS_CARD_TRANSACTION_FEE') {
+        if (in_array($type, self::FEE_TYPES, true) || $type === 'ASAAS_CARD_TRANSACTION_FEE' || $type === 'ASAAS_CARD_RECHARGE_FEE') {
             return 'Asaas';
         }
 
