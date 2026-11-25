@@ -29,11 +29,20 @@ class AsaasPaymentBlock
 {
     /**
      * Build the payment block for an invoice, or null when Asaas is not
-     * enabled / no charge could be resolved. Never throws.
+     * enabled / no charge could be resolved / invoice is already paid. Never throws.
      */
     public static function forInvoice(Invoice $invoice): ?string
     {
         try {
+            if ($invoice->exists) {
+                $invoice->refresh();
+            }
+
+            // Do not plot payment block on already paid or cancelled invoices
+            if (in_array((int) $invoice->status_id, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED], true) || (float) $invoice->balance <= 0) {
+                return null;
+            }
+
             $service = AsaasBoletoService::forInvoice($invoice);
 
             if (! $service->isAvailable()) {

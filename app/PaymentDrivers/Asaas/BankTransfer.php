@@ -109,8 +109,8 @@ class BankTransfer implements MethodInterface, LivewireMethodInterface
             if ($paymentId) {
                 try {
                     $asaasPayment = $api->getPayment($paymentId);
-                    // Check if already cancelled or expired
-                    if (in_array($asaasPayment['status'] ?? '', ['OVERDUE', 'CANCELLED', 'REFUNDED'])) {
+                    // Check if cancelled, refunded, or deleted
+                    if (!empty($asaasPayment['deleted']) || in_array($asaasPayment['status'] ?? '', ['CANCELLED', 'REFUNDED'])) {
                         $paymentId = null;
                         $asaasPayment = null;
                     }
@@ -123,18 +123,26 @@ class BankTransfer implements MethodInterface, LivewireMethodInterface
                 $invoiceNumber = $firstInvoice ? ($firstInvoice->number ?? $firstInvoice->invoice_number ?? '') : '';
                 $description = 'Fatura ' . ($invoiceNumber ? '#' . $invoiceNumber : '#' . $this->driver->payment_hash->hash);
 
-                $paymentPayload = [
-                    'customer' => $customerId,
-                    'billingType' => 'BOLETO', // Generates Boleto with embedded Pix
-                    'value' => (float) $data['amount'],
-                    'dueDate' => $dueDate,
-                    'description' => $description,
-                    'externalReference' => $this->driver->payment_hash->hash,
-                    'postalService' => false,
-                ];
+                // Re-use active payment from Asaas if one already exists for this externalReference or description
+                $existing = $api->findPendingPayment($customerId, $description, $this->driver->payment_hash->hash);
 
-                $asaasPayment = $api->createPayment($paymentPayload);
-                $paymentId = $asaasPayment['id'];
+                if ($existing && !empty($existing['id'])) {
+                    $asaasPayment = $existing;
+                    $paymentId = $asaasPayment['id'];
+                } else {
+                    $paymentPayload = [
+                        'customer' => $customerId,
+                        'billingType' => 'BOLETO', // Generates Boleto with embedded Pix
+                        'value' => (float) $data['amount'],
+                        'dueDate' => $dueDate,
+                        'description' => $description,
+                        'externalReference' => $this->driver->payment_hash->hash,
+                        'postalService' => false,
+                    ];
+
+                    $asaasPayment = $api->createPayment($paymentPayload);
+                    $paymentId = $asaasPayment['id'];
+                }
             }
 
             // Fetch Pix QR code and identification field

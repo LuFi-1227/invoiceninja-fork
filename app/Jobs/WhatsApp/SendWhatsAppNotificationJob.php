@@ -56,16 +56,17 @@ class SendWhatsAppNotificationJob implements ShouldQueue
             return;
         }
 
-        // Prevent duplicate WhatsApp reminders on the same day for the same invoice & template
+        // Prevent duplicate WhatsApp reminders on the same day for the same invoice & template (atomic lock)
         $templateKey = $this->reminderTemplate ?: 'invoice';
         $cacheKey = "wa_sent_{$this->invoice->id}_{$templateKey}_" . now()->format('Ymd');
-        if (Cache::has($cacheKey)) {
+        if (!Cache::add($cacheKey, true, now()->addHours(20))) {
             Log::info("WhatsApp notification already sent today for invoice {$this->invoice->number} ({$templateKey}). Skipping.");
             return;
         }
 
         $service = new WhatsAppService($company);
         if (!$service->isConfigured()) {
+            Cache::forget($cacheKey);
             return;
         }
 
@@ -76,11 +77,13 @@ class SendWhatsAppNotificationJob implements ShouldQueue
         if ($isReminder) {
             $autoSendReminders = $config['auto_send_reminders'] ?? true;
             if (!$autoSendReminders) {
+                Cache::forget($cacheKey);
                 return;
             }
         } else {
             $autoSendInvoice = $config['auto_send_on_create'] ?? false;
             if (!$autoSendInvoice) {
+                Cache::forget($cacheKey);
                 return;
             }
         }
@@ -88,9 +91,9 @@ class SendWhatsAppNotificationJob implements ShouldQueue
         $result = $service->sendInvoiceReminder($this->invoice, $templateKey);
 
         if ($result['success'] ?? false) {
-            Cache::put($cacheKey, true, now()->addHours(20));
             Log::info("WhatsApp notification dispatched successfully for invoice {$this->invoice->number} ({$templateKey}).");
         } else {
+            Cache::forget($cacheKey);
             Log::warning("WhatsApp notification failed for invoice {$this->invoice->number} ({$templateKey}): " . ($result['error'] ?? ''));
         }
     }

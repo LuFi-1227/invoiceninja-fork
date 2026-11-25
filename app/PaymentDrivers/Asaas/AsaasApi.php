@@ -256,25 +256,37 @@ class AsaasApi
     }
 
     /**
-     * Find an active pending payment for a customer matching description or external reference.
+     * Find an active pending or overdue (payable) payment for a customer matching description or external reference.
      */
     public function findPendingPayment(string $customerId, ?string $description = null, ?string $externalReference = null): ?array
     {
         try {
-            $query = ['customer' => $customerId, 'status' => 'PENDING'];
+            $query = ['customer' => $customerId];
             if ($externalReference) {
                 $query['externalReference'] = $externalReference;
             }
             $response = $this->client()->get($this->baseUrl . '/payments', $query);
             if ($response->successful()) {
                 $items = $response->json('data') ?? [];
-                foreach ($items as $item) {
-                    if (empty($item['deleted']) && ($item['status'] ?? '') === 'PENDING') {
-                        if ($description && ($item['description'] ?? '') === $description) {
-                            return (array) $item;
+
+                // 1. Prioritize matching by exact externalReference (active: PENDING or OVERDUE)
+                if ($externalReference) {
+                    foreach ($items as $item) {
+                        if (empty($item['deleted']) && in_array($item['status'] ?? '', ['PENDING', 'OVERDUE'], true)) {
+                            if (($item['externalReference'] ?? '') === $externalReference) {
+                                return (array) $item;
+                            }
                         }
-                        if ($externalReference && ($item['externalReference'] ?? '') === $externalReference) {
-                            return (array) $item;
+                    }
+                }
+
+                // 2. Fallback to matching by invoice description (active: PENDING or OVERDUE)
+                if ($description) {
+                    foreach ($items as $item) {
+                        if (empty($item['deleted']) && in_array($item['status'] ?? '', ['PENDING', 'OVERDUE'], true)) {
+                            if (($item['description'] ?? '') === $description) {
+                                return (array) $item;
+                            }
                         }
                     }
                 }

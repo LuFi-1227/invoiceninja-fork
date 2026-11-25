@@ -42,8 +42,11 @@ class AsaasBoletoService
     public const KIND_BOLETO = 'boleto';
     public const KIND_PIX = 'pix';
 
-    /** Statuses that make a charge impossible to reuse. */
-    private const CLOSED_STATUSES = ['OVERDUE', 'CANCELLED', 'REFUNDED', 'RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+    /** Statuses that indicate a charge has been cancelled/refunded and cannot be paid. */
+    private const CANCELLED_STATUSES = ['CANCELLED', 'REFUNDED'];
+
+    /** Statuses that indicate a charge has already been paid/confirmed. */
+    private const PAID_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH', 'DUNNING_RECEIVED'];
 
     public function __construct(private Invoice $invoice) {}
 
@@ -75,6 +78,10 @@ class AsaasBoletoService
      */
     public function payableAmount(): float
     {
+        if ($this->invoice->exists && (int) $this->invoice->status_id !== Invoice::STATUS_PAID) {
+            $this->invoice->refresh();
+        }
+
         if (in_array((int) $this->invoice->status_id, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED], true)) {
             return 0.0;
         }
@@ -101,6 +108,10 @@ class AsaasBoletoService
     {
         $gateway = $this->gateway();
 
+        if ($this->invoice->exists) {
+            $this->invoice->refresh();
+        }
+
         return $gateway !== null
             && ! empty($gateway->getConfigField('apiKey'))
             && ! empty($this->invoice->id)
@@ -126,11 +137,31 @@ class AsaasBoletoService
             if ($paymentId) {
                 $payment = $this->safePayment($api, (string) $paymentId);
                 $status = $payment['status'] ?? null;
+                $isDeleted = ! empty($payment['deleted']);
 
-                if (! $payment || ! empty($payment['deleted']) || in_array($status, self::CLOSED_STATUSES, true)) {
+                // If already paid, update hash data and do NOT create a new charge
+                if ($payment && ! $isDeleted && in_array($status, self::PAID_STATUSES, true)) {
+                    $stored = (array) $hash->data;
+                    $stored['asaas_status'] = $status;
+                    $hash->data = $stored;
+                    $hash->save();
+
+                    return null;
+                }
+
+                // If charge was deleted or cancelled/refunded, discard reference so a new one can be created
+                if (! $payment || $isDeleted || in_array($status, self::CANCELLED_STATUSES, true)) {
                     $hash = null;
                     $payment = null;
                     $paymentId = null;
+                } else {
+                    // Payment is active (PENDING, OVERDUE, etc.) - keep and reuse it!
+                    if (($hash->data->asaas_status ?? '') !== $status) {
+                        $stored = (array) $hash->data;
+                        $stored['asaas_status'] = $status;
+                        $hash->data = $stored;
+                        $hash->save();
+                    }
                 }
             }
 

@@ -416,7 +416,7 @@ class WhatsAppService
                 'result' => $result,
             ],
             SystemLog::CATEGORY_MAIL,
-            SystemLog::EVENT_REMIND_INVOICE,
+            SystemLog::EVENT_MAIL_SEND,
             SystemLog::TYPE_ASAAS,
             $invoice->client,
             $this->company
